@@ -1,0 +1,6 @@
+jira_id,project_name,repo_name,jira_status,migration_status,assigned_to
+JIRA-101,ProjectA,repo-alpha,testing,pending testing,john.doe
+JIRA-102,ProjectB,repo-beta,done,in_progress testing,jane.smith
+JIRA-103,ProjectC,repo-gamma,in_progress,completed,bob.wilson
+JIRA-104,ProjectA,repo-delta,done,completed,john.doe
+JIRA-105,ProjectD,repo-epsilon,closed,completed,alice.brown
