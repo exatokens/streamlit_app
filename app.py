@@ -34,5 +34,23 @@ BasePage.render_login_form()
 # Welcome section
 st.header("Welcome to the GitHub Migration Portal")
 
+st.markdown("""
+### Features
+- **Data Management**: View and edit migration data
+- **JIRA Integration**: Fetch and update JIRA ticket statuses
+- **User Authentication**: Secure access with role-based permissions
+- **Change Tracking**: Track and review changes before saving
+
+### Navigation
+Use the sidebar to navigate to different pages.
+
+### Column Configuration
+All columns are configured with:
+- **Editable/Non-editable** controls
+- **Data type validation** (text, number, selectbox)
+- **Required field validation**
+- **Display name customization**
+""")
+
 # Render footer
-BasePage.render_footer()
+BasePage.render_footer("GitHub Migration Portal © 2024")

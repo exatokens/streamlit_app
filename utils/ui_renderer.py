@@ -3,7 +3,7 @@ UI Renderer - Handles all UI rendering logic
 """
 import streamlit as st
 import pandas as pd
-from config.config import COLUMN_CONFIG, TABLE_HEIGHT
+from config.config import COLUMN_CONFIG, TABLE_HEIGHT, COLUMN_DEFINITIONS
 
 
 class UIRenderer:
@@ -35,44 +35,6 @@ class UIRenderer:
         return refresh_clicked
 
     @staticmethod
-    def render_filter_row(columns, current_filters):
-        """
-        Render filter inputs for each column
-
-        Args:
-            columns: List of column names
-            current_filters: Dictionary of current filter values
-
-        Returns:
-            dict: Updated filters dictionary
-        """
-        filter_cols = st.columns(len(columns) + 1)  # +1 for Select column
-        updated_filters = {}
-
-        for i, col in enumerate(columns):
-            with filter_cols[i]:
-                filter_value = st.text_input(
-                    f"filter_{col}",
-                    value=current_filters.get(col, ""),
-                    placeholder=f"{col}",
-                    key=f"filter_{col}",
-                    label_visibility="collapsed"
-                )
-                updated_filters[col] = filter_value
-
-        # Placeholder for Select column filter
-        with filter_cols[len(columns)]:
-            st.text_input(
-                "filter_select",
-                value="",
-                placeholder="Select",
-                disabled=True,
-                label_visibility="collapsed"
-            )
-
-        return updated_filters
-
-    @staticmethod
     def render_data_table(df):
         """
         Render the main data table with editor
@@ -83,18 +45,47 @@ class UIRenderer:
         Returns:
             pd.DataFrame: Edited dataframe
         """
+        # Build column config for st.data_editor
+        editor_column_config = {}
+
+        for col_name in df.columns:
+            if col_name in COLUMN_DEFINITIONS:
+                col_def = COLUMN_DEFINITIONS[col_name]
+
+                if col_def["type"] == "checkbox":
+                    editor_column_config[col_name] = st.column_config.CheckboxColumn(
+                        col_def["display_name"],
+                        default=False
+                    )
+                elif col_def["type"] == "selectbox" and "options" in col_def:
+                    editor_column_config[col_name] = st.column_config.SelectboxColumn(
+                        col_def["display_name"],
+                        options=col_def["options"],
+                        required=col_def.get("required", False)
+                    )
+                elif col_def["type"] == "number":
+                    editor_column_config[col_name] = st.column_config.NumberColumn(
+                        col_def["display_name"]
+                    )
+                else:  # text
+                    editor_column_config[col_name] = st.column_config.TextColumn(
+                        col_def["display_name"]
+                    )
+
+        # Determine which columns are disabled
+        disabled_columns = [
+            col for col, def_ in COLUMN_DEFINITIONS.items()
+            if not def_.get("editable", True) and col in df.columns
+        ]
+
         edited_data = st.data_editor(
             df,
             use_container_width=True,
             height=TABLE_HEIGHT,
             hide_index=True,
             num_rows="fixed",
-            column_config={
-                "select": st.column_config.CheckboxColumn(
-                    COLUMN_CONFIG["select"]["label"],
-                    default=COLUMN_CONFIG["select"]["default"]
-                )
-            },
+            column_config=editor_column_config,
+            disabled=disabled_columns,
             key="main_editor"
         )
 
@@ -173,8 +164,11 @@ class UIRenderer:
         discarded_indices = []
 
         for idx, row in zip(changed_indices, changed_df.itertuples(index=False)):
+            # Get the first visible column value for display
+            first_col_value = row[0] if len(row) > 0 else 'N/A'
+
             with st.expander(
-                    f"Row {idx} - {row[0] if len(row) > 0 else 'N/A'}",
+                    f"Row {idx} - {first_col_value}",
                     expanded=True
             ):
                 col_display, col_button = st.columns([5, 1])

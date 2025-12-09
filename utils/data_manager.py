@@ -20,6 +20,20 @@ class DataManager:
             # Read CSV and remove completely empty rows
             df = pd.read_csv(CSV_PATH)
 
+            # Replace 'None' string with empty string for all columns
+            df = df.replace('None', '')
+
+            # Get all text columns from config (not number, selectbox, or checkbox)
+            from config.config import COLUMN_DEFINITIONS
+            text_columns = [
+                col for col, col_def in COLUMN_DEFINITIONS.items()
+                if col_def.get('type') == 'text' and col in df.columns
+            ]
+
+            # Fill NaN values with empty strings for all text columns
+            for col in text_columns:
+                df[col] = df[col].fillna('')
+
             # Drop rows where all values are NaN
             df = df.dropna(how='all')
 
@@ -93,30 +107,6 @@ class DataManager:
             return edited_clean.iloc[changed_indices].copy(), changed_indices
 
         return pd.DataFrame(), []
-
-    @staticmethod
-    def apply_filters(df, filters):
-        """
-        Apply filters to dataframe
-
-        Args:
-            df: DataFrame to filter
-            filters: Dictionary of column: value filters
-
-        Returns:
-            pd.DataFrame: Filtered dataframe
-        """
-        filtered_df = df.copy()
-
-        for col, value in filters.items():
-            if value:
-                filtered_df = filtered_df[
-                    filtered_df[col].astype(str).str.contains(
-                        value, case=False, na=False
-                    )
-                ]
-
-        return filtered_df
 
     @staticmethod
     def reset_row(df, original_df, idx):

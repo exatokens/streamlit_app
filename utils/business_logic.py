@@ -5,7 +5,7 @@ Handles all business logic operations for GitHub migration
 import time
 from utils.data_manager import DataManager
 from utils.api_service import fetch_jira_status
-from config.config import SAVE_DELAY, REFRESH_DELAY
+from config.config import SAVE_DELAY, REFRESH_DELAY, get_required_columns
 
 
 class MigrationService:
@@ -60,8 +60,8 @@ class MigrationService:
             status_map = {}
 
             for idx in selected_indices:
-                jira_id = data.at[idx, 'jira_id']
-                new_status = fetch_jira_status(jira_id)
+                jira_ticket = data.at[idx, 'jira_ticket']
+                new_status = fetch_jira_status(jira_ticket)
                 status_map[idx] = new_status
 
             # Update data
@@ -77,20 +77,6 @@ class MigrationService:
             return True, updated_data, None
         except Exception as e:
             return False, data, str(e)
-
-    @staticmethod
-    def apply_filters(data, filters):
-        """
-        Apply filters to data
-
-        Args:
-            data: DataFrame to filter
-            filters: Dictionary of filters
-
-        Returns:
-            DataFrame: Filtered data
-        """
-        return DataManager.apply_filters(data, filters)
 
     @staticmethod
     def detect_changes(original_data, current_data):
@@ -134,23 +120,25 @@ class MigrationService:
         """
         errors = []
 
-        # Check required columns
-        required_columns = ['jira_id', 'project_name', 'repo_name']
+        # Check required columns from config
+        required_columns = get_required_columns()
         for col in required_columns:
             if col not in data.columns:
                 errors.append(f"Missing required column: {col}")
 
         # Check for empty required fields
-        if 'jira_id' in data.columns:
-            empty_jira = data['jira_id'].isna().sum()
-            if empty_jira > 0:
-                errors.append(f"{empty_jira} rows have empty JIRA ID")
+        for col in required_columns:
+            if col in data.columns:
+                # Check for NaN or empty strings
+                empty_count = data[col].isna().sum()
+                if empty_count > 0:
+                    errors.append(f"{empty_count} rows have empty {col}")
 
-        # Check for duplicate JIRA IDs
-        if 'jira_id' in data.columns:
-            duplicates = data['jira_id'].duplicated().sum()
+        # Check for duplicate IDs
+        if 'id' in data.columns:
+            duplicates = data['id'].duplicated().sum()
             if duplicates > 0:
-                errors.append(f"{duplicates} duplicate JIRA IDs found")
+                errors.append(f"{duplicates} duplicate IDs found")
 
         return len(errors) == 0, errors
 
@@ -173,7 +161,6 @@ class SessionManager:
             st_session_state.fetching_status = False
             st_session_state.selected_rows = []
             st_session_state.saving = False
-            st_session_state.filters = {}
 
     @staticmethod
     def reset_operation_flags(st_session_state):
@@ -212,7 +199,6 @@ class SessionManager:
         """Reset data to original"""
         st_session_state.data = st_session_state.original_data.copy()
         st_session_state.selected_rows = []
-        st_session_state.filters = {}
 
 
 class EventHandler:
@@ -250,10 +236,4 @@ class EventHandler:
             st_session_state.original_data,
             idx
         )
-        st.rerun()
-
-    @staticmethod
-    def handle_filter_change(st_session_state, st, filters):
-        """Handle filter change"""
-        st_session_state.filters = filters
         st.rerun()

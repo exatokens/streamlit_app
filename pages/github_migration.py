@@ -40,12 +40,17 @@ def main():
 
     # Load data on first run
     if st.session_state.data is None:
-        try:
-            st.session_state.data = DataManager.load_data_from_csv()
-            st.session_state.original_data = st.session_state.data.copy()
-        except Exception as e:
-            st.error(f"Error loading data: {str(e)}")
-            st.stop()
+        with st.spinner("Fetching data..."):
+            try:
+                # Simulate data loading delay (for DB/large CSV loading)
+                import time
+                time.sleep(2)
+
+                st.session_state.data = DataManager.load_data_from_csv()
+                st.session_state.original_data = st.session_state.data.copy()
+            except Exception as e:
+                st.error(f"Error loading data: {str(e)}")
+                st.stop()
 
     # Process different states
     if st.session_state.refreshing:
@@ -167,26 +172,10 @@ def render_main_view():
     if refresh_clicked:
         EventHandler.handle_refresh(st.session_state, st)
 
-    # Render filter row
-    data_columns = list(st.session_state.data.columns)
-    updated_filters = UIRenderer.render_filter_row(
-        data_columns,
-        st.session_state.filters
-    )
+    # No filter row - filters removed as requested
 
-    # Check if filters changed
-    filters_changed = updated_filters != st.session_state.filters
-    if filters_changed:
-        EventHandler.handle_filter_change(st.session_state, st, updated_filters)
-
-    # Apply filters
-    filtered_data = MigrationService.apply_filters(
-        st.session_state.data,
-        st.session_state.filters
-    )
-
-    # Add select column
-    display_data = DataManager.add_select_column(filtered_data.copy())
+    # Get current data (no filters applied)
+    display_data = DataManager.add_select_column(st.session_state.data.copy())
 
     # Render data table
     edited_data = UIRenderer.render_data_table(display_data)
