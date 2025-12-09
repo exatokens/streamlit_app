@@ -2,6 +2,8 @@
 Authentication Service
 Handles user authentication and session management
 """
+import time
+
 import streamlit as st
 from datetime import datetime, timedelta
 import hashlib
@@ -88,6 +90,7 @@ class AuthService:
             bool: True if authentication successful
         """
         # Simple authentication (check against allowed users)
+        time.sleep(2)
         if username in ALLOWED_USERS and ALLOWED_USERS[username] == password:
             return True
 
