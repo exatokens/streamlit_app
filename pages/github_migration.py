@@ -17,24 +17,17 @@ from config.config import (
     SUCCESS_MESSAGE_DELAY,
     ERROR_MESSAGE_DELAY
 )
-from config.auth_config import AUTH_ENABLED
+from utils.base_page import BasePage
 from utils.data_manager import DataManager
 from utils.ui_renderer import UIRenderer
 from utils.business_logic import MigrationService, SessionManager, EventHandler
-from utils.auth_service import AuthService, AuthUI, require_authentication, require_page_access
+from utils.auth_service import AuthService, require_page_access
 
-# Page configuration
-st.set_page_config(**PAGE_CONFIG)
-
-# Hide deploy button only
-st.markdown("""
-<style>
-    /* Hide deploy button */
-    [data-testid="stToolbar"] {
-        display: none;
-    }
-</style>
-""", unsafe_allow_html=True)
+# Setup page using BasePage
+BasePage.setup_page(
+    page_title=PAGE_CONFIG['page_title'],
+    page_icon=PAGE_CONFIG['page_icon']
+)
 
 
 @require_page_access("github_migration")
@@ -104,25 +97,23 @@ def process_save():
             SessionManager.set_saving(st.session_state, False)
             UIRenderer.show_error(f"Validation failed: {', '.join(errors)}")
             time.sleep(ERROR_MESSAGE_DELAY)
-            st.rerun()
-            return
-
-        # Save data
-        success, error = MigrationService.save_changes(st.session_state.data)
-
-        if success:
-            # Update session state
-            actual_data = st.session_state.data.drop(columns=['select'], errors='ignore')
-            SessionManager.update_original_data(st.session_state, actual_data.copy())
-            SessionManager.update_data(st.session_state, actual_data.copy())
-            SessionManager.set_saving(st.session_state, False)
-
-            UIRenderer.show_success("Data saved successfully!")
-            time.sleep(SUCCESS_MESSAGE_DELAY)
         else:
-            SessionManager.set_saving(st.session_state, False)
-            UIRenderer.show_error(f"Error saving data: {error}")
-            time.sleep(ERROR_MESSAGE_DELAY)
+            # Save data
+            success, error = MigrationService.save_changes(st.session_state.data)
+
+            if success:
+                # Update session state
+                actual_data = st.session_state.data.drop(columns=['select'], errors='ignore')
+                SessionManager.update_original_data(st.session_state, actual_data.copy())
+                SessionManager.update_data(st.session_state, actual_data.copy())
+                SessionManager.set_saving(st.session_state, False)
+
+                UIRenderer.show_success("Data saved successfully!")
+                time.sleep(SUCCESS_MESSAGE_DELAY)
+            else:
+                SessionManager.set_saving(st.session_state, False)
+                UIRenderer.show_error(f"Error saving data: {error}")
+                time.sleep(ERROR_MESSAGE_DELAY)
 
     st.rerun()
 
@@ -165,44 +156,16 @@ def process_fetch_status():
 
 def render_main_view():
     """Render the main application view"""
-    # Render header with kebab menu containing username and settings
-    col_title, col_menu, col_refresh = st.columns([8, 1, 1])
+    # Render header with user menu and refresh button using BasePage
+    refresh_clicked = BasePage.render_header(
+        title="GitHub Migration Data",
+        show_user_menu=True,
+        show_refresh=True
+    )
 
-    with col_title:
-        st.markdown("### GitHub Migration Data")
-
-    with col_menu:
-        # Get session info for display
-        session_info = AuthService.get_session_info()
-        username = AuthService.get_username()
-
-        # Kebab menu with username and settings
-        with st.popover(f"👤 {username}"):
-            st.markdown(f"### {username}")
-
-            # Show role
-            if AuthService.is_admin():
-                st.caption("🔑 Administrator")
-            else:
-                st.caption("👤 User")
-
-            st.markdown("---")
-
-            # Session info
-            if session_info:
-                st.markdown(f"**Login Time:** {session_info['login_time']}")
-                st.markdown(f"**Session Duration:** {session_info['session_duration']}")
-
-            st.markdown("---")
-
-            # Logout button
-            if st.button("🚪 Logout", use_container_width=True, key="logout_main"):
-                AuthService.logout()
-                st.rerun()
-
-    with col_refresh:
-        if st.button("🔄 Refresh", use_container_width=True):
-            EventHandler.handle_refresh(st.session_state, st)
+    # Handle refresh
+    if refresh_clicked:
+        EventHandler.handle_refresh(st.session_state, st)
 
     # Render filter row
     data_columns = list(st.session_state.data.columns)

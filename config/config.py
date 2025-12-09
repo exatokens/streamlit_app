@@ -20,7 +20,8 @@ JIRA_STATUSES = ['open', 'in_progress', 'testing', 'done', 'closed']
 # UI Configuration
 PAGE_CONFIG = {
     "page_title": "GitHub Migration",
-    "layout": "wide"
+    "layout": "wide",
+    "page_icon": "🕸️"
 }
 
 # Timing configurations (in seconds)

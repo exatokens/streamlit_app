@@ -154,31 +154,6 @@ class MigrationService:
 
         return len(errors) == 0, errors
 
-    @staticmethod
-    def get_statistics(data):
-        """
-        Get statistics about the migration data
-
-        Args:
-            data: DataFrame
-
-        Returns:
-            dict: Statistics
-        """
-        stats = {
-            'total_rows': len(data),
-            'unique_projects': data['project_name'].nunique() if 'project_name' in data.columns else 0,
-            'status_distribution': {}
-        }
-
-        if 'migration_status' in data.columns:
-            stats['status_distribution'] = data['migration_status'].value_counts().to_dict()
-
-        if 'jira_status' in data.columns:
-            stats['jira_status_distribution'] = data['jira_status'].value_counts().to_dict()
-
-        return stats
-
 
 class SessionManager:
     """Manages session state for the application"""
