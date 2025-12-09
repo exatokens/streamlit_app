@@ -3,6 +3,7 @@ Base Page Class
 Contains common functionality for all pages
 """
 import streamlit as st
+from typing import Literal
 from utils.auth_service import AuthService
 
 
@@ -16,7 +17,7 @@ class BasePage:
     }
 
     @staticmethod
-    def setup_page(page_title, page_icon="🏠"):
+    def setup_page(page_title: str, page_icon: str = "🏠"):
         """
         Setup common page configuration
 
@@ -27,8 +28,8 @@ class BasePage:
         st.set_page_config(
             page_title=page_title,
             page_icon=page_icon,
-            layout=BasePage.PAGE_CONFIG['layout'],
-            initial_sidebar_state=BasePage.PAGE_CONFIG['initial_sidebar_state']
+            layout=BasePage.PAGE_CONFIG['layout'],  # type: ignore
+            initial_sidebar_state=BasePage.PAGE_CONFIG['initial_sidebar_state']  # type: ignore
         )
 
         # Hide deploy button
