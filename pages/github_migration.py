@@ -26,6 +26,16 @@ from utils.auth_service import AuthService, AuthUI, require_authentication, requ
 # Page configuration
 st.set_page_config(**PAGE_CONFIG)
 
+# Hide deploy button only
+st.markdown("""
+<style>
+    /* Hide deploy button */
+    [data-testid="stToolbar"] {
+        display: none;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 
 @require_page_access("github_migration")
 def main():
@@ -34,18 +44,6 @@ def main():
     # Initialize session state
     AuthService.initialize_session()
     SessionManager.initialize(st.session_state)
-
-    # Display authentication status (for debugging)
-    # Remove this section once authentication is confirmed working
-    if st.checkbox("Show Auth Debug Info", value=False):
-        st.sidebar.markdown("### 🐛 Debug Info")
-        st.sidebar.write(f"AUTH_ENABLED: {AUTH_ENABLED}")
-        st.sidebar.write(f"Authenticated: {AuthService.is_authenticated()}")
-        st.sidebar.write(f"Username: {AuthService.get_username()}")
-        st.sidebar.write(f"Is Admin: {AuthService.is_admin()}")
-
-    # Render session info in sidebar
-    AuthUI.render_session_info()
 
     # Load data on first run
     if st.session_state.data is None:
@@ -167,23 +165,40 @@ def process_fetch_status():
 
 def render_main_view():
     """Render the main application view"""
-    # Render header with user info and refresh button
-    col_title, col_user, col_logout, col_refresh = st.columns([4, 1, 1, 1])
+    # Render header with kebab menu containing username and settings
+    col_title, col_menu, col_refresh = st.columns([8, 1, 1])
 
     with col_title:
-        st.title("Data Table with Refresh")
+        st.markdown("### GitHub Migration Data")
 
-    with col_user:
+    with col_menu:
+        # Get session info for display
+        session_info = AuthService.get_session_info()
         username = AuthService.get_username()
-        if AuthService.is_admin():
-            st.markdown(f"**👤 {username}** 🔑")
-        else:
-            st.markdown(f"**👤 {username}**")
 
-    with col_logout:
-        if st.button("🚪 Logout", use_container_width=True, key="logout_main"):
-            AuthService.logout()
-            st.rerun()
+        # Kebab menu with username and settings
+        with st.popover(f"👤 {username}"):
+            st.markdown(f"### {username}")
+
+            # Show role
+            if AuthService.is_admin():
+                st.caption("🔑 Administrator")
+            else:
+                st.caption("👤 User")
+
+            st.markdown("---")
+
+            # Session info
+            if session_info:
+                st.markdown(f"**Login Time:** {session_info['login_time']}")
+                st.markdown(f"**Session Duration:** {session_info['session_duration']}")
+
+            st.markdown("---")
+
+            # Logout button
+            if st.button("🚪 Logout", use_container_width=True, key="logout_main"):
+                AuthService.logout()
+                st.rerun()
 
     with col_refresh:
         if st.button("🔄 Refresh", use_container_width=True):
@@ -258,23 +273,9 @@ def render_main_view():
 
 
 def render_admin_section():
-    """Render admin-only section with statistics"""
-    with st.expander("📊 Statistics (Admin Only)", expanded=False):
-        stats = MigrationService.get_statistics(st.session_state.data)
-
-        col1, col2, col3 = st.columns(3)
-
-        with col1:
-            st.metric("Total Rows", stats['total_rows'])
-
-        with col2:
-            st.metric("Unique Projects", stats['unique_projects'])
-
-        with col3:
-            if 'status_distribution' in stats:
-                st.write("**Migration Status:**")
-                for status, count in stats['status_distribution'].items():
-                    st.write(f"- {status}: {count}")
+    """Render admin-only section"""
+    with st.expander("🔑 Admin Section", expanded=False):
+        st.info("You are admin. Only you can see this text.")
 
 
 # Call main function (Streamlit pages run directly)

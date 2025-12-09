@@ -1,0 +1,14 @@
+[project]
+name = "streamlit-app"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "mysql-connector>=2.2.9",
+    "mysql-connector-python==8.2.0",
+    "pandas>=2.3.3",
+    "requests>=2.32.5",
+    "streamlit>=1.52.1",
+    "streamlit-cookies-controller>=0.0.4",
+]

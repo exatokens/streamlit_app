@@ -57,3 +57,7 @@ PAGE_PERMISSIONS = {
 BLOCKED_USERS = {
     "github_migration": ["john.doe"],  # john.doe is blocked!
 }
+
+# john.doe john123
+# jane.smith jane123
+# siva password123

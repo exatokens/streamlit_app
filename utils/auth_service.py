@@ -4,6 +4,9 @@ Handles user authentication and session management
 """
 import streamlit as st
 from datetime import datetime, timedelta
+import hashlib
+import json
+from streamlit_cookies_controller import CookieController
 from config.auth_config import (
     AUTH_ENABLED,
     ALLOWED_USERS,
@@ -20,15 +23,57 @@ from config.auth_config import (
 class AuthService:
     """Authentication service for user login and session management"""
 
+    # Cookie controller instance
+    _cookie_controller = None
+
+    @staticmethod
+    def _get_cookie_controller():
+        """Get or create cookie controller instance"""
+        if AuthService._cookie_controller is None:
+            AuthService._cookie_controller = CookieController()
+        return AuthService._cookie_controller
+
+    @staticmethod
+    def _create_session_data(username):
+        """Create session data dictionary"""
+        return {
+            'username': username,
+            'is_admin': username in ADMIN_USERS,
+            'login_time': datetime.now().isoformat(),
+            'token': hashlib.sha256(f"{username}{datetime.now().isoformat()}".encode()).hexdigest()[:32]
+        }
+
     @staticmethod
     def initialize_session():
         """Initialize authentication session state"""
+        # First time initialization
         if 'authenticated' not in st.session_state:
             st.session_state.authenticated = False
             st.session_state.username = None
             st.session_state.is_admin = False
             st.session_state.login_time = None
             st.session_state.last_activity = None
+
+            # Try to restore from cookie
+            try:
+                cookies = AuthService._get_cookie_controller()
+                session_cookie = cookies.get('auth_session')
+
+                if session_cookie:
+                    session_data = json.loads(session_cookie)
+
+                    # Check if session is still valid (within timeout)
+                    login_time = datetime.fromisoformat(session_data['login_time'])
+                    if datetime.now() - login_time < timedelta(minutes=SESSION_TIMEOUT_MINUTES):
+                        # Restore session
+                        st.session_state.authenticated = True
+                        st.session_state.username = session_data['username']
+                        st.session_state.is_admin = session_data['is_admin']
+                        st.session_state.login_time = login_time
+                        st.session_state.last_activity = datetime.now()
+            except Exception:
+                # If cookie is invalid or expired, just continue with fresh session
+                pass
 
     @staticmethod
     def authenticate_user(username, password):
@@ -114,12 +159,31 @@ class AuthService:
             st.session_state.is_admin = username in ADMIN_USERS
             st.session_state.login_time = datetime.now()
             st.session_state.last_activity = datetime.now()
+
+            # Save session to cookie
+            try:
+                session_data = AuthService._create_session_data(username)
+                cookies = AuthService._get_cookie_controller()
+                # Set cookie to expire in SESSION_TIMEOUT_MINUTES
+                cookies.set('auth_session', json.dumps(session_data), max_age=SESSION_TIMEOUT_MINUTES * 60)
+            except Exception:
+                # If cookie save fails, session will still work for current page load
+                pass
+
             return True
         return False
 
     @staticmethod
     def logout():
         """Logout user and clear session"""
+        # Clear cookie
+        try:
+            cookies = AuthService._get_cookie_controller()
+            cookies.remove('auth_session')
+        except Exception:
+            pass
+
+        # Clear session state
         st.session_state.authenticated = False
         st.session_state.username = None
         st.session_state.is_admin = False
@@ -303,11 +367,11 @@ class AuthUI:
 
                 if submit:
                     if username and password:
-                        if AuthService.login(username, password):
-                            st.success(f"Welcome, {username}!")
-                            st.rerun()
-                        else:
-                            st.error(AUTH_MESSAGES['invalid_credentials'])
+                        with st.spinner("Authenticating..."):
+                            if AuthService.login(username, password):
+                                st.rerun()
+                            else:
+                                st.error(AUTH_MESSAGES['invalid_credentials'])
                     else:
                         st.warning("Please enter both username and password")
 
