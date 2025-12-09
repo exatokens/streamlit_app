@@ -228,28 +228,22 @@ def render_main_view():
     # Render data table
     edited_data = UIRenderer.render_data_table(display_data)
 
-    # Check if data was actually edited (cell changed)
-    # Compare edited_data with display_data to detect changes
-    edited_clean = edited_data.drop(columns=['select'], errors='ignore')
-    display_clean = display_data.drop(columns=['select'], errors='ignore')
-
-    # If data changed, trigger rerun to update the UI
-    data_was_edited = False
-    try:
-        if not edited_clean.equals(display_clean):
-            data_was_edited = True
-    except:
-        # If comparison fails, assume data was edited
-        data_was_edited = True
-
     # Update selected rows
     st.session_state.selected_rows = DataManager.get_selected_rows(edited_data)
 
     # Update data with edits (exclude select column)
+    edited_clean = edited_data.drop(columns=['select'], errors='ignore')
+
+    # Track if we made any actual changes
+    has_updates = False
     for idx in edited_clean.index:
         for col in edited_clean.columns:
             if col in st.session_state.data.columns:
-                st.session_state.data.at[idx, col] = edited_clean.at[idx, col]
+                old_value = st.session_state.data.at[idx, col]
+                new_value = edited_clean.at[idx, col]
+                if old_value != new_value:
+                    st.session_state.data.at[idx, col] = new_value
+                    has_updates = True
 
     # Get changed rows
     changed_rows, changed_indices = MigrationService.detect_changes(
@@ -257,8 +251,8 @@ def render_main_view():
         st.session_state.data
     )
 
-    # If data was edited, rerun to show changes immediately
-    if data_was_edited:
+    # If we made updates, rerun to show changes immediately
+    if has_updates:
         st.rerun()
 
     # Render action buttons
