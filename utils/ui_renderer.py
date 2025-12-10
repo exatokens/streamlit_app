@@ -30,7 +30,7 @@ class UIRenderer:
             st.title("Data Table with Refresh")
 
         with col_button:
-            refresh_clicked = st.button("Refresh", use_container_width=True)
+            refresh_clicked = st.button("Refresh", width="stretch")
 
         return refresh_clicked
 
@@ -80,7 +80,7 @@ class UIRenderer:
 
         edited_data = st.data_editor(
             df,
-            use_container_width=True,
+            width="stretch",
             height=TABLE_HEIGHT,
             hide_index=True,
             num_rows="fixed",
@@ -101,7 +101,7 @@ class UIRenderer:
         """
         st.dataframe(
             df,
-            use_container_width=True,
+            width="stretch",
             height=TABLE_HEIGHT,
             hide_index=True
         )
@@ -127,10 +127,10 @@ class UIRenderer:
             col_empty, col_save, col_cancel = st.columns([4, 1, 1])
 
             with col_save:
-                save_clicked = st.button("Save Changes", use_container_width=True)
+                save_clicked = st.button("Save Changes", width="stretch")
 
             with col_cancel:
-                cancel_clicked = st.button("Cancel", use_container_width=True)
+                cancel_clicked = st.button("Cancel", width="stretch")
 
         # Fetch JIRA Status button
         if num_selected > 0:
@@ -142,7 +142,7 @@ class UIRenderer:
             with col_fetch:
                 fetch_clicked = st.button(
                     "Fetch JIRA Status",
-                    use_container_width=True
+                    width="stretch"
                 )
 
         return save_clicked, cancel_clicked, fetch_clicked
@@ -175,7 +175,7 @@ class UIRenderer:
 
                 with col_display:
                     row_df = pd.DataFrame([row], columns=changed_df.columns)
-                    st.dataframe(row_df, use_container_width=True, hide_index=True)
+                    st.dataframe(row_df, width="stretch", hide_index=True)
 
                 with col_button:
                     if st.button("Discard", key=f"discard_{idx}"):

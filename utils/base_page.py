@@ -82,7 +82,7 @@ class BasePage:
 
         if show_refresh:
             with col_refresh:
-                refresh_clicked = st.button("🔄 Refresh", use_container_width=True)
+                refresh_clicked = st.button("🔄 Refresh", width="stretch")
 
         return refresh_clicked
 
@@ -112,12 +112,12 @@ class BasePage:
                 st.markdown("---")
 
                 # Logout button
-                if st.button("🚪 Logout", use_container_width=True, key="logout_menu"):
+                if st.button("🚪 Logout", width="stretch", key="logout_menu"):
                     AuthService.logout()
                     st.rerun()
         else:
             # Show login button
-            if st.button("🔐 Login", use_container_width=True, key="show_login"):
+            if st.button("🔐 Login", width="stretch", key="show_login"):
                 st.session_state.show_login_form = True
 
     @staticmethod
@@ -150,9 +150,9 @@ class BasePage:
 
                     col_submit, col_cancel = st.columns(2)
                     with col_submit:
-                        submit = st.form_submit_button("Login", use_container_width=True)
+                        submit = st.form_submit_button("Login", width="stretch")
                     with col_cancel:
-                        cancel = st.form_submit_button("Cancel", use_container_width=True)
+                        cancel = st.form_submit_button("Cancel", width="stretch")
 
                     if submit:
                         if username and password:
