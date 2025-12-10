@@ -65,11 +65,8 @@ def main():
 
 def process_refresh():
     """Process data refresh operation"""
-    UIRenderer.render_loading_overlay()
-
+    # Show spinner with message - no table rendering
     with UIRenderer.show_spinner("Refreshing data..."):
-        UIRenderer.render_static_table(st.session_state.data)
-
         # Refresh data
         success, data, error = MigrationService.refresh_data()
 
@@ -87,14 +84,8 @@ def process_refresh():
 
 def process_save():
     """Process save operation"""
-    UIRenderer.render_loading_overlay()
-
-    # Display data during save
-    display_data = DataManager.add_select_column(st.session_state.data.copy())
-
+    # Show spinner with message - no table rendering
     with UIRenderer.show_spinner("Saving changes..."):
-        UIRenderer.render_static_table(display_data)
-
         # Validate data before saving
         is_valid, errors = MigrationService.validate_data(st.session_state.data)
 
@@ -125,18 +116,10 @@ def process_save():
 
 def process_fetch_status():
     """Process JIRA status fetch operation"""
-    UIRenderer.render_loading_overlay()
-
-    # Display data with selections during fetch
-    display_data = DataManager.add_select_column(st.session_state.data.copy())
-    for idx in st.session_state.selected_rows:
-        display_data.at[idx, 'select'] = True
-
+    # Show spinner with message - no table rendering
     with UIRenderer.show_spinner(
         f"Fetching JIRA status for {len(st.session_state.selected_rows)} rows..."
     ):
-        UIRenderer.render_static_table(display_data)
-
         # Fetch JIRA statuses
         success, updated_data, error = MigrationService.fetch_jira_statuses(
             st.session_state.data,

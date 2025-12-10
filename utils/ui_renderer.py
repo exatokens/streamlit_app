@@ -10,18 +10,6 @@ class UIRenderer:
     """Handles all UI rendering operations"""
 
     @staticmethod
-    def render_loading_overlay():
-        """Render CSS for loading overlay effect"""
-        st.markdown("""
-        <style>
-        div[data-testid="stDataFrame"] {
-            opacity: 0.3;
-            pointer-events: none;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
-    @staticmethod
     def render_header():
         """Render page header with title and refresh button"""
         col_title, col_button = st.columns([6, 1])
@@ -90,21 +78,6 @@ class UIRenderer:
         )
 
         return edited_data
-
-    @staticmethod
-    def render_static_table(df):
-        """
-        Render a static (non-editable) dataframe
-
-        Args:
-            df: DataFrame to display
-        """
-        st.dataframe(
-            df,
-            width="stretch",
-            height=TABLE_HEIGHT,
-            hide_index=True
-        )
 
     @staticmethod
     def render_action_buttons(has_changes, num_selected):
