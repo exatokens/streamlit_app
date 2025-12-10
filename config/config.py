@@ -4,10 +4,6 @@ Configuration file for GitHub Migration application
 
 # File paths
 CSV_PATH = '/Users/siva/sandbox/streamlit_app/models/jira_test_data.csv'
-"""
-Configuration file for GitHub Migration application
-"""
-
 # Column Definitions - Complete control over all columns
 COLUMN_DEFINITIONS = {
     "id": {
@@ -61,7 +57,7 @@ COLUMN_DEFINITIONS = {
         "display_name": "Workflow",
         "type": "selectbox",
         "options": ['workflow-library', 'workflow-gitflow', 'workflow-trunk'],
-        "editable": False,
+        "editable": True,
         "width": "medium",
         "visible": True,
         "required": True,
@@ -155,58 +151,16 @@ COLUMN_DEFINITIONS = {
     }
 }
 
-
-# Column configuration for data editor (derived from COLUMN_DEFINITIONS)
-def get_column_config():
-    """Generate Streamlit column config from COLUMN_DEFINITIONS"""
-    config = {}
-
-    for col_name, col_def in COLUMN_DEFINITIONS.items():
-        if not col_def.get("visible", True):
-            continue
-
-        if col_def["type"] == "checkbox":
-            config[col_name] = {
-                "type": "checkbox",
-                "label": col_def["display_name"],
-                "default": False
-            }
-        elif col_def["type"] == "selectbox":
-            config[col_name] = {
-                "type": "selectbox",
-                "options": col_def.get("options", [])
-            }
-        elif col_def["type"] == "number":
-            config[col_name] = {
-                "type": "number"
-            }
-
-    return config
-
-
-COLUMN_CONFIG = get_column_config()
-
-
-# Get list of visible columns in order
-def get_visible_columns():
-    """Get list of visible column names in order"""
-    return [col for col, def_ in COLUMN_DEFINITIONS.items()
-            if def_.get("visible", True) and col != "select"]
-
-
-# Get list of editable columns
-def get_editable_columns():
-    """Get list of editable column names"""
-    return [col for col, def_ in COLUMN_DEFINITIONS.items()
-            if def_.get("editable", True)]
-
-
 # Get list of required columns
 def get_required_columns():
     """Get list of required column names"""
     return [col for col, def_ in COLUMN_DEFINITIONS.items()
             if def_.get("required", False)]
 
+# Get list of configured columns (excluding 'select')
+def get_configured_columns():
+    """Get list of all configured column names (excluding 'select')"""
+    return [col for col in COLUMN_DEFINITIONS.keys() if col != 'select']
 
 # Available JIRA statuses (for simulation/API calls)
 JIRA_STATUSES = ['Open', 'In Progress', 'Testing', 'Done', 'Closed']
