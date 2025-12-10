@@ -52,6 +52,17 @@ def main():
                 st.error(f"Error loading data: {str(e)}")
                 st.stop()
 
+    # Always render header first (so it's visible during all operations)
+    refresh_clicked = BasePage.render_header(
+        title="GitHub Migration Data",
+        show_user_menu=True,
+        show_refresh=True
+    )
+
+    # Handle refresh button click
+    if refresh_clicked and not st.session_state.refreshing:
+        EventHandler.handle_refresh(st.session_state, st)
+
     # Process different states
     if st.session_state.refreshing:
         process_refresh()
@@ -65,7 +76,23 @@ def main():
 
 def process_refresh():
     """Process data refresh operation"""
-    # Show spinner with message - no table rendering
+    # Render the table with reduced opacity
+    display_data = DataManager.add_select_column(st.session_state.data.copy())
+
+    # Add CSS to dim the table
+    st.markdown("""
+    <style>
+    div[data-testid="stDataFrame"] {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Show the table
+    UIRenderer.render_data_table(display_data)
+
+    # Show spinner with message below the table
     with UIRenderer.show_spinner("Refreshing data..."):
         # Refresh data
         success, data, error = MigrationService.refresh_data()
@@ -84,7 +111,23 @@ def process_refresh():
 
 def process_save():
     """Process save operation"""
-    # Show spinner with message - no table rendering
+    # Render the table with reduced opacity
+    display_data = DataManager.add_select_column(st.session_state.data.copy())
+
+    # Add CSS to dim the table
+    st.markdown("""
+    <style>
+    div[data-testid="stDataFrame"] {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Show the table
+    UIRenderer.render_data_table(display_data)
+
+    # Show spinner with message below the table
     with UIRenderer.show_spinner("Saving changes..."):
         # Validate data before saving
         is_valid, errors = MigrationService.validate_data(st.session_state.data)
@@ -116,9 +159,34 @@ def process_save():
 
 def process_fetch_status():
     """Process JIRA status fetch operation"""
-    # Show spinner with message - no table rendering
+    # Render the table with reduced opacity
+    display_data = DataManager.add_select_column(st.session_state.data.copy())
+    for idx in st.session_state.selected_rows:
+        display_data.at[idx, 'select'] = True
+
+    # Add CSS to dim the table
+    st.markdown("""
+    <style>
+    div[data-testid="stDataFrame"] {
+        opacity: 0.4;
+        pointer-events: none;
+    }
+    </style>
+    """, unsafe_allow_html=True)
+
+    # Show the table
+    UIRenderer.render_data_table(display_data)
+
+    # Get list of JIRA ticket IDs for selected rows
+    jira_tickets = [
+        st.session_state.data.at[idx, 'jira_ticket']
+        for idx in st.session_state.selected_rows
+    ]
+    jira_tickets_str = ", ".join(jira_tickets)
+
+    # Show spinner with message below the table
     with UIRenderer.show_spinner(
-        f"Fetching JIRA status for {len(st.session_state.selected_rows)} rows..."
+        f"Fetching JIRA status for: {jira_tickets_str}"
     ):
         # Fetch JIRA statuses
         success, updated_data, error = MigrationService.fetch_jira_statuses(
@@ -132,7 +200,7 @@ def process_fetch_status():
             SessionManager.update_original_data(st.session_state, actual_data.copy())
             SessionManager.update_data(st.session_state, actual_data.copy())
 
-            UIRenderer.show_success("Updated JIRA status for selected rows!")
+            UIRenderer.show_success(f"Updated JIRA status for: {jira_tickets_str}")
         else:
             UIRenderer.show_error(f"Error fetching JIRA status: {error}")
 
@@ -143,20 +211,7 @@ def process_fetch_status():
 
 
 def render_main_view():
-    """Render the main application view"""
-    # Render header with user menu and refresh button using BasePage
-    refresh_clicked = BasePage.render_header(
-        title="GitHub Migration Data",
-        show_user_menu=True,
-        show_refresh=True
-    )
-
-    # Handle refresh
-    if refresh_clicked:
-        EventHandler.handle_refresh(st.session_state, st)
-
-    # No filter row - filters removed as requested
-
+    """Render the main application view (header already rendered in main())"""
     # Get current data (no filters applied)
     display_data = DataManager.add_select_column(st.session_state.data.copy())
 
@@ -218,6 +273,10 @@ def render_main_view():
     # Show statistics (for admin users)
     if AuthService.is_admin():
         render_admin_section()
+
+    # Render footer
+    st.markdown("---")
+    st.caption("GitHub Migration Data Manager")
 
 
 def render_admin_section():

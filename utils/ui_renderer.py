@@ -3,7 +3,7 @@ UI Renderer - Handles all UI rendering logic
 """
 import streamlit as st
 import pandas as pd
-from config.config import COLUMN_CONFIG, TABLE_HEIGHT, COLUMN_DEFINITIONS
+from config.config import TABLE_HEIGHT, COLUMN_DEFINITIONS
 
 
 class UIRenderer:

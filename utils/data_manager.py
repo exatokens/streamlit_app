@@ -11,20 +11,27 @@ class DataManager:
     @staticmethod
     def load_data_from_csv():
         """
-        Load data from CSV file
+        Load data from CSV file - only load columns defined in COLUMN_DEFINITIONS
 
         Returns:
-            pd.DataFrame: Loaded dataframe
+            pd.DataFrame: Loaded dataframe with only configured columns
         """
         try:
-            # Read CSV and remove completely empty rows
+            # Get list of columns we want to load from config
+            from config.config import COLUMN_DEFINITIONS, get_configured_columns
+            configured_columns = get_configured_columns()
+
+            # Read CSV - only load configured columns that exist in the CSV
             df = pd.read_csv(CSV_PATH)
+
+            # Filter to only keep columns that are in our configuration
+            available_columns = [col for col in configured_columns if col in df.columns]
+            df = df[available_columns]
 
             # Replace 'None' string with empty string for all columns
             df = df.replace('None', '')
 
             # Get all text columns from config (not number, selectbox, or checkbox)
-            from config.config import COLUMN_DEFINITIONS
             text_columns = [
                 col for col, col_def in COLUMN_DEFINITIONS.items()
                 if col_def.get('type') == 'text' and col in df.columns
