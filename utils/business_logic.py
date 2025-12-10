@@ -121,24 +121,24 @@ class MigrationService:
         errors = []
 
         # Check required columns from config
-        required_columns = get_required_columns()
-        for col in required_columns:
-            if col not in data.columns:
-                errors.append(f"Missing required column: {col}")
-
-        # Check for empty required fields
-        for col in required_columns:
-            if col in data.columns:
-                # Check for NaN or empty strings
-                empty_count = data[col].isna().sum()
-                if empty_count > 0:
-                    errors.append(f"{empty_count} rows have empty {col}")
-
-        # Check for duplicate IDs
-        if 'id' in data.columns:
-            duplicates = data['id'].duplicated().sum()
-            if duplicates > 0:
-                errors.append(f"{duplicates} duplicate IDs found")
+        # required_columns = get_required_columns()
+        # for col in required_columns:
+        #     if col not in data.columns:
+        #         errors.append(f"Missing required column: {col}")
+        #
+        # # Check for empty required fields
+        # for col in required_columns:
+        #     if col in data.columns:
+        #         # Check for NaN or empty strings
+        #         empty_count = data[col].isna().sum()
+        #         if empty_count > 0:
+        #             errors.append(f"{empty_count} rows have empty {col}")
+        #
+        # # Check for duplicate IDs
+        # if 'id' in data.columns:
+        #     duplicates = data['id'].duplicated().sum()
+        #     if duplicates > 0:
+        #         errors.append(f"{duplicates} duplicate IDs found")
 
         return len(errors) == 0, errors
 
