@@ -16,7 +16,8 @@ if str(parent_dir) not in sys.path:
 from config.config import (
     PAGE_CONFIG,
     SUCCESS_MESSAGE_DELAY,
-    ERROR_MESSAGE_DELAY
+    ERROR_MESSAGE_DELAY,
+    COLUMN_DEFINITIONS,
 )
 from utils.base_page import BasePage
 from utils.data_manager import DataManager
@@ -60,6 +61,9 @@ def main():
     if refresh_clicked and not st.session_state.refreshing:
         EventHandler.handle_refresh(st.session_state, st)
 
+    # Render column filters in sidebar (widgets must be outside fragments)
+    _render_filters_sidebar()
+
     # Process different states
     if st.session_state.refreshing:
         process_refresh()
@@ -80,11 +84,64 @@ def _values_different(old_value, new_value):
         return True
     return old_value != new_value
 
+
+def _init_column_filters():
+    """Ensure column filters dict exists in session state."""
+    if "column_filters" not in st.session_state:
+        st.session_state.column_filters = {}
+
+
+def _render_filters_sidebar():
+    """
+    Render filters in the sidebar.
+    One text input per column (except id and select/fetch update).
+    """
+    _init_column_filters()
+
+    with st.sidebar.expander("🔍 Filters", expanded=False):
+        st.caption("Type to filter rows. Matching is case-insensitive and substring-based.")
+
+        # Build list of columns to filter: all except id and select/fetch-update
+        for col in st.session_state.data.columns:
+            if col in ("id", "select"):
+                continue
+
+            col_def = COLUMN_DEFINITIONS.get(col, {})
+            label = col_def.get("display_name", col.replace("_", " ").title())
+
+            key = f"filter_{col}"
+            current_value = st.session_state.column_filters.get(col, "")
+
+            value = st.text_input(label, value=current_value, key=key)
+            # Persist trimmed value back to filters dict
+            st.session_state.column_filters[col] = value.strip()
+
+
+def _apply_column_filters(df):
+    """Return a filtered copy of df based on current column_filters."""
+    _init_column_filters()
+    filtered = df
+
+    for col, term in st.session_state.column_filters.items():
+        if not term:
+            continue
+        if col not in filtered.columns:
+            continue
+        # Case-insensitive substring match on stringified values
+        filtered = filtered[
+            filtered[col]
+            .astype(str)
+            .str.contains(term, case=False, na=False)
+        ]
+
+    return filtered
+
 @st.fragment
 def process_refresh():
     """Process data refresh operation"""
-    # Render the table with reduced opacity
-    display_data = DataManager.add_select_column(st.session_state.data.copy())
+    # Render the (filtered) table with reduced opacity
+    base_data = _apply_column_filters(st.session_state.data.copy())
+    display_data = DataManager.add_select_column(base_data)
 
     # Add CSS to dim the table
     st.markdown("""
@@ -121,8 +178,9 @@ def process_refresh():
 @st.fragment
 def process_save():
     """Process save operation"""
-    # Render the table with reduced opacity
-    display_data = DataManager.add_select_column(st.session_state.data.copy())
+    # Render the (filtered) table with reduced opacity
+    base_data = _apply_column_filters(st.session_state.data.copy())
+    display_data = DataManager.add_select_column(base_data)
 
     st.markdown("""
     <style>
@@ -180,8 +238,9 @@ def process_save():
 @st.fragment
 def process_fetch_status():
     """Process JIRA status fetch operation"""
-    # Render the table with reduced opacity and current selections
-    display_data = DataManager.add_select_column(st.session_state.data.copy())
+    # Render the (filtered) table with reduced opacity and current selections
+    base_data = _apply_column_filters(st.session_state.data.copy())
+    display_data = DataManager.add_select_column(base_data)
     for idx in st.session_state.selected_rows:
         display_data.at[idx, 'select'] = True
 
@@ -253,14 +312,19 @@ def render_admin_fragment():
         render_admin_section()
 
 
-@st.fragment
 def render_main_view():
     """Render the main application view (header already rendered in main())"""
-    # Get current data (no filters applied)
-    display_data = DataManager.add_select_column(st.session_state.data.copy())
+    # Get current data and apply filters
+    base_data = _apply_column_filters(st.session_state.data.copy())
+    display_data = DataManager.add_select_column(base_data)
+    total_count = len(st.session_state.data) if st.session_state.data is not None else 0
+    filtered_count = len(base_data)
 
     # Render data table
     edited_data = UIRenderer.render_data_table(display_data)
+
+    # Show record counts below the table
+    st.caption(f"Showing {filtered_count} of {total_count} record(s)")
 
     # Update selected rows
     st.session_state.selected_rows = DataManager.get_selected_rows(edited_data)
