@@ -1,6 +1,6 @@
 """
 Business Logic Module
-Handles all business logic operations for GitHub migration
+Handles all business logic operations for GitHub migration with Database
 """
 import time
 from utils.data_manager import DataManager
@@ -14,32 +14,38 @@ class MigrationService:
     @staticmethod
     def refresh_data():
         """
-        Refresh data from CSV
-
+        Refresh data from database
+        
         Returns:
             tuple: (success, data, error_message)
         """
         try:
             time.sleep(REFRESH_DELAY)
-            data = DataManager.load_data_from_csv()
+            data = DataManager.load_data_from_db()
             return True, data, None
         except Exception as e:
             return False, None, str(e)
 
     @staticmethod
-    def save_changes(data):
+    def save_changes(data, changed_indices):
         """
-        Save changes to CSV
-
+        Save changes to database
+        
         Args:
             data: DataFrame to save
-
+            changed_indices: List of indices that have changed
+            
         Returns:
             tuple: (success, error_message)
         """
         try:
             time.sleep(SAVE_DELAY)
-            DataManager.save_data_to_csv(data, include_select=False)
+            success_count, errors = DataManager.save_data_to_db(data, changed_indices)
+            
+            if errors:
+                error_msg = f"Saved {success_count} rows. Errors: " + "; ".join(errors)
+                return False, error_msg
+            
             return True, None
         except Exception as e:
             return False, str(e)
@@ -48,32 +54,33 @@ class MigrationService:
     def fetch_jira_statuses(data, selected_indices):
         """
         Fetch JIRA statuses for selected rows
-
+        
         Args:
             data: DataFrame containing the data
             selected_indices: List of row indices to update
-
+            
         Returns:
             tuple: (success, updated_data, error_message)
         """
         try:
             status_map = {}
-
+            
             for idx in selected_indices:
                 jira_ticket = data.at[idx, 'jira_ticket']
-                new_status = fetch_jira_status(jira_ticket)
-                status_map[idx] = new_status
-
+                if jira_ticket and jira_ticket != '':
+                    new_status = fetch_jira_status(jira_ticket)
+                    status_map[idx] = new_status
+            
             # Update data
             updated_data = DataManager.update_jira_status(
                 data.copy(),
                 selected_indices,
                 status_map
             )
-
-            # Save updated data
-            DataManager.save_data_to_csv(updated_data, include_select=False)
-
+            
+            # Note: JIRA status updates would need to be saved separately
+            # since jira_status is not in EDITABLE_DB_COLUMNS
+            
             return True, updated_data, None
         except Exception as e:
             return False, data, str(e)
@@ -82,11 +89,11 @@ class MigrationService:
     def detect_changes(original_data, current_data):
         """
         Detect changes between original and current data
-
+        
         Args:
             original_data: Original DataFrame
             current_data: Current DataFrame
-
+            
         Returns:
             tuple: (changed_dataframe, list of changed indices)
         """
@@ -96,12 +103,12 @@ class MigrationService:
     def discard_row_changes(current_data, original_data, idx):
         """
         Discard changes for a specific row
-
+        
         Args:
             current_data: Current DataFrame
             original_data: Original DataFrame
             idx: Row index to discard
-
+            
         Returns:
             DataFrame: Updated data with row restored
         """
@@ -111,14 +118,18 @@ class MigrationService:
     def validate_data(data):
         """
         Validate data before saving
-
+        
         Args:
             data: DataFrame to validate
-
+            
         Returns:
             tuple: (is_valid, error_messages)
         """
         errors = []
+        
+        # Add validation rules if needed
+        # For example, check date ranges, required fields for editable columns, etc.
+        
         return len(errors) == 0, errors
 
 
@@ -129,7 +140,7 @@ class SessionManager:
     def initialize(st_session_state):
         """
         Initialize session state
-
+        
         Args:
             st_session_state: Streamlit session state object
         """

@@ -4,6 +4,7 @@ Streamlit application for managing GitHub migration data with authentication
 """
 import streamlit as st
 import time
+import pandas as pd
 import sys
 from pathlib import Path
 
@@ -42,11 +43,7 @@ def main():
     if st.session_state.data is None:
         with st.spinner("Fetching data..."):
             try:
-                # Simulate data loading delay (for DB/large CSV loading)
-                import time
-                time.sleep(2)
-
-                st.session_state.data = DataManager.load_data_from_csv()
+                st.session_state.data = DataManager.load_data_from_db()
                 st.session_state.original_data = st.session_state.data.copy()
             except Exception as e:
                 st.error(f"Error loading data: {str(e)}")
@@ -74,6 +71,15 @@ def main():
         render_main_view()
 
 
+def _values_different(old_value, new_value):
+    if pd.isna(old_value) and pd.isna(new_value):
+        return False
+    if pd.isna(old_value) and not pd.isna(new_value):
+        return True
+    if not pd.isna(old_value) and pd.isna(new_value):
+        return True
+    return old_value != new_value
+
 def process_refresh():
     """Process data refresh operation"""
     # Render the table with reduced opacity
@@ -98,8 +104,10 @@ def process_refresh():
         success, data, error = MigrationService.refresh_data()
 
         if success:
-            SessionManager.update_data(st.session_state, data)
-            SessionManager.update_original_data(st.session_state, data)
+            fresh = data.copy()
+            SessionManager.update_data(st.session_state, fresh.copy())
+            SessionManager.update_original_data(st.session_state, fresh.copy())
+            st.session_state.selected_rows = []
         else:
             UIRenderer.show_error(f"Error refreshing data: {error}")
             time.sleep(ERROR_MESSAGE_DELAY)
@@ -111,10 +119,8 @@ def process_refresh():
 
 def process_save():
     """Process save operation"""
-    # Render the table with reduced opacity
     display_data = DataManager.add_select_column(st.session_state.data.copy())
 
-    # Add CSS to dim the table
     st.markdown("""
     <style>
     div[data-testid="stDataFrame"] {
@@ -124,11 +130,21 @@ def process_save():
     </style>
     """, unsafe_allow_html=True)
 
-    # Show the table
     UIRenderer.render_data_table(display_data)
 
-    # Show spinner with message below the table
     with UIRenderer.show_spinner("Saving changes..."):
+        # detect changed rows first
+        changed_rows, changed_indices = MigrationService.detect_changes(
+            st.session_state.original_data,
+            st.session_state.data
+        )
+
+        if not changed_indices:
+            SessionManager.set_saving(st.session_state, False)
+            UIRenderer.show_info("No changes to save.")
+            time.sleep(SUCCESS_MESSAGE_DELAY)
+            st.rerun()
+
         # Validate data before saving
         is_valid, errors = MigrationService.validate_data(st.session_state.data)
 
@@ -137,16 +153,16 @@ def process_save():
             UIRenderer.show_error(f"Validation failed: {', '.join(errors)}")
             time.sleep(ERROR_MESSAGE_DELAY)
         else:
-            # Save data
-            success, error = MigrationService.save_changes(st.session_state.data)
+            success, error = MigrationService.save_changes(
+                st.session_state.data,
+                changed_indices
+            )
 
             if success:
-                # Update session state
                 actual_data = st.session_state.data.drop(columns=['select'], errors='ignore')
                 SessionManager.update_original_data(st.session_state, actual_data.copy())
                 SessionManager.update_data(st.session_state, actual_data.copy())
                 SessionManager.set_saving(st.session_state, False)
-
                 UIRenderer.show_success("Data saved successfully!")
                 time.sleep(SUCCESS_MESSAGE_DELAY)
             else:
@@ -231,7 +247,7 @@ def render_main_view():
             if col in st.session_state.data.columns:
                 old_value = st.session_state.data.at[idx, col]
                 new_value = edited_clean.at[idx, col]
-                if old_value != new_value:
+                if _values_different(old_value, new_value):
                     st.session_state.data.at[idx, col] = new_value
                     has_updates = True
 

@@ -1,10 +1,18 @@
 """
-Configuration file for GitHub Migration application
+Configuration file for GitHub Migration application - Database Edition
 """
 
-# File paths
-CSV_PATH = '/Users/siva/sandbox/streamlit_app/models/jira_test_data.csv'
-# Column Definitions - Complete control over all columns
+# Database Configuration
+DB_CONFIG = {
+    'host': 'localhost',
+    'user': 'root',
+    'password': '***',
+    'database': 'workflow_db',
+    'port': 3306
+}
+
+# Column Definitions based on database schema
+# Maps database columns to UI configuration
 COLUMN_DEFINITIONS = {
     "id": {
         "display_name": "ID",
@@ -13,55 +21,71 @@ COLUMN_DEFINITIONS = {
         "width": "small",
         "visible": True,
         "required": True,
-        "comment": "Primary key - should never be edited"
+        "db_column": "id",
+        "comment": "Primary key - auto-generated"
     },
-    "prjt_repo": {
-        "display_name": "Project Repository",
+    "meta_project": {
+        "display_name": "Meta Project",
         "type": "text",
-        "editable": True,
-        "width": "medium",
+        "editable": False,
+        "width": "large",
         "visible": True,
         "required": True,
-        "comment": "Project repository name in format ORG:repo-name"
+        "db_column": "meta_project",
+        "comment": "Concatenation of meta.name : project.name"
     },
-    "eonid": {
+    "eon_id": {
         "display_name": "EON ID",
         "type": "number",
-        "editable": True,
+        "editable": False,
         "width": "small",
         "visible": True,
-        "required": True,
-        "comment": "Employee/Owner Number ID"
+        "required": False,
+        "db_column": "eon_id",
+        "comment": "Employee Owner Number ID"
+    },
+    "multiple_eon": {
+        "display_name": "Multiple EON",
+        "type": "selectbox",
+        "options": ['YES', 'NO'],
+        "editable": False,
+        "width": "small",
+        "visible": True,
+        "required": False,
+        "db_column": "multiple_eon",
+        "comment": "Whether project has multiple EONs"
     },
     "active": {
         "display_name": "Active",
         "type": "selectbox",
         "options": ['YES', 'NO'],
-        "editable": True,
+        "editable": False,
         "width": "small",
         "visible": True,
-        "required": True,
-        "comment": "Whether the repository is active"
+        "required": False,
+        "db_column": "active",
+        "comment": "Whether the project is active"
     },
     "archived": {
         "display_name": "Archived",
         "type": "selectbox",
         "options": ['YES', 'NO'],
-        "editable": True,
+        "editable": False,
         "width": "small",
         "visible": True,
-        "required": True,
-        "comment": "Whether the repository is archived"
+        "required": False,
+        "db_column": "archived",
+        "comment": "Whether the project is archived"
     },
     "workflow": {
         "display_name": "Workflow",
-        "type": "selectbox",
-        "options": ['workflow-library', 'workflow-gitflow', 'workflow-trunk'],
-        "editable": True,
+        "type": "text",
+        "editable": False,
         "width": "medium",
         "visible": True,
-        "required": True,
-        "comment": "Workflow type for the repository"
+        "required": False,
+        "db_column": "workflow",
+        "comment": "Workflow type (varchar 255)"
     },
     "phase": {
         "display_name": "Phase",
@@ -70,78 +94,116 @@ COLUMN_DEFINITIONS = {
         "editable": True,
         "width": "small",
         "visible": True,
-        "required": True,
-        "comment": "Migration phase"
-    },
-    "test_migration_status": {
-        "display_name": "Test Migration Status",
-        "type": "text",
-        "editable": True,
-        "width": "medium",
-        "visible": True,
         "required": False,
-        "comment": "Status of test migration (can be None)"
+        "db_column": "phase",
+        "comment": "Migration phase - EDITABLE"
     },
     "jira_ticket": {
         "display_name": "JIRA Ticket",
         "type": "text",
-        "editable": True,
+        "editable": False,
         "width": "medium",
         "visible": True,
-        "required": True,
+        "required": False,
+        "db_column": "jira_ticket",
         "comment": "JIRA ticket ID"
     },
     "jira_status": {
         "display_name": "JIRA Status",
-        "type": "selectbox",
-        "options": ['Open', 'In Progress', 'Testing', 'Done', 'Closed'],
-        "editable": True,
+        "type": "text",
+        "editable": False,
         "width": "medium",
         "visible": True,
-        "required": True,
-        "comment": "Current JIRA ticket status"
+        "required": False,
+        "db_column": "jira_status",
+        "comment": "Current JIRA status"
     },
-    "meta_project": {
-        "display_name": "Meta Project",
+    "migrated_by": {
+        "display_name": "Migrated By",
         "type": "text",
         "editable": True,
         "width": "medium",
         "visible": True,
         "required": False,
-        "comment": "Meta project information (can be None)"
+        "db_column": "migrated_by",
+        "comment": "Person who performed migration - EDITABLE"
     },
-    "migrated_repo": {
-        "display_name": "Migrated Repo",
-        "type": "selectbox",
-        "options": ['YES', 'NO'],
-        "editable": True,
-        "width": "small",
-        "visible": True,
-        "required": True,
-        "comment": "Whether repository has been migrated"
-    },
-    "template_repo": {
-        "display_name": "Template Repo",
-        "type": "selectbox",
-        "options": ['YES', 'NO'],
-        "editable": True,
-        "width": "small",
-        "visible": True,
-        "required": True,
-        "comment": "Whether this is a template repository"
-    },
-    "migration_status": {
-        "display_name": "Migration Status",
-        "type": "selectbox",
-        "options": ['Pending', 'InProgress', 'Completed', 'Failed', 'On Hold'],
+    "migration_start_date": {
+        "display_name": "Migration Start Date",
+        "type": "date",
         "editable": True,
         "width": "medium",
         "visible": True,
-        "required": True,
-        "comment": "Overall migration status"
+        "required": False,
+        "db_column": "migration_start_date",
+        "comment": "Migration start date - EDITABLE"
+    },
+    "migration_end_date": {
+        "display_name": "Migration End Date",
+        "type": "date",
+        "editable": True,
+        "width": "medium",
+        "visible": True,
+        "required": False,
+        "db_column": "migration_end_date",
+        "comment": "Migration end date - EDITABLE"
+    },
+    "comments": {
+        "display_name": "Comments",
+        "type": "text",
+        "editable": True,
+        "width": "large",
+        "visible": True,
+        "required": False,
+        "db_column": "comments",
+        "comment": "Comments/notes - EDITABLE"
+    },
+    "restricted_files": {
+        "display_name": "Restricted Files",
+        "type": "selectbox",
+        "options": ['YES', 'NO'],
+        "editable": False,
+        "width": "small",
+        "visible": True,
+        "required": False,
+        "db_column": "restricted_files",
+        "comment": "Whether project has restricted files"
+    },
+    "large_files": {
+        "display_name": "Large Files",
+        "type": "selectbox",
+        "options": ['YES', 'NO'],
+        "editable": False,
+        "width": "small",
+        "visible": True,
+        "required": False,
+        "db_column": "large_files",
+        "comment": "Whether project has large files"
+    },
+    "hsip": {
+        "display_name": "HSIP",
+        "type": "selectbox",
+        "options": ['YES', 'NO'],
+        "editable": False,
+        "width": "small",
+        "visible": True,
+        "required": False,
+        "db_column": "hsip",
+        "comment": "HSIP flag"
+    },
+    "ssh": {
+        "display_name": "SSH",
+        "type": "selectbox",
+        "options": ['YES', 'NO'],
+        "editable": False,
+        "width": "small",
+        "visible": True,
+        "required": False,
+        "db_column": "ssh",
+        "comment": "SSH flag"
     },
     "select": {
-        "display_name": "Select",
+        "display_name": "Fetch Update",
         "type": "checkbox",
         "editable": True,
         "width": "small",
@@ -151,16 +213,22 @@ COLUMN_DEFINITIONS = {
     }
 }
 
-# Get list of required columns
+# Editable columns that can be updated in the database
+EDITABLE_DB_COLUMNS = ['migrated_by', 'migration_start_date', 'migration_end_date', 'phase', 'comments']
+
 def get_required_columns():
     """Get list of required column names"""
     return [col for col, def_ in COLUMN_DEFINITIONS.items()
             if def_.get("required", False)]
 
-# Get list of configured columns (excluding 'select')
 def get_configured_columns():
     """Get list of all configured column names (excluding 'select')"""
     return [col for col in COLUMN_DEFINITIONS.keys() if col != 'select']
+
+def get_editable_columns():
+    """Get list of editable column names"""
+    return [col for col, def_ in COLUMN_DEFINITIONS.items()
+            if def_.get("editable", False) and col != 'select']
 
 # Available JIRA statuses (for simulation/API calls)
 JIRA_STATUSES = ['Open', 'In Progress', 'Testing', 'Done', 'Closed']

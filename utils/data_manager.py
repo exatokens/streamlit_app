@@ -1,96 +1,211 @@
 """
-Data Manager - Handles all data loading, saving, and manipulation
+Data Manager - Handles all data loading, saving, and manipulation with Database
 """
 import pandas as pd
-from config.config import CSV_PATH
+import numpy as np
+from datetime import datetime, date
+from typing import Optional, List, Dict, Any
+from utils.dataobject import DataObject
+from config.config import DB_CONFIG, COLUMN_DEFINITIONS, EDITABLE_DB_COLUMNS
 
 
 class DataManager:
     """Manages data operations for the application"""
 
     @staticmethod
-    def load_data_from_csv():
+    def _convert_db_to_pandas(value, column_type):
         """
-        Load data from CSV file - only load columns defined in COLUMN_DEFINITIONS
+        Convert database value to pandas-friendly value
+
+        Args:
+            value: Value from database
+            column_type: Column type from COLUMN_DEFINITIONS
 
         Returns:
-            pd.DataFrame: Loaded dataframe with only configured columns
+            Converted value suitable for pandas DataFrame
         """
+        # Handle NULL/None values
+        if value is None or value == 'NULL' or (isinstance(value, str) and value.strip() == ''):
+            if column_type == 'date':
+                return pd.NaT
+            elif column_type == 'number':
+                return pd.NA
+            else:
+                return pd.NA
+
+        # Handle date conversions
+        if column_type == 'date':
+            if isinstance(value, (datetime, date)):
+                return pd.Timestamp(value)
+            elif isinstance(value, str):
+                try:
+                    return pd.to_datetime(value)
+                except:
+                    return pd.NaT
+
+        # Handle enum/selectbox - convert to string
+        if column_type == 'selectbox':
+            return str(value).strip() if value else pd.NA
+
+        # Return as-is for other types
+        return value
+
+    @staticmethod
+    def _convert_pandas_to_db(value, column_type):
+        # Handle pandas NA, None, NaT, empty string
+        if pd.isna(value) or value is None or value == '' or value == pd.NaT:
+            return None
+
+        # Handle date conversions
+        if column_type == 'date':
+            if isinstance(value, pd.Timestamp):
+                return value.strftime('%Y-%m-%d')
+            if isinstance(value, (datetime, date)):
+                return pd.to_datetime(value).strftime('%Y-%m-%d')
+            if isinstance(value, str):
+                try:
+                    dt = pd.to_datetime(value)
+                    return dt.strftime('%Y-%m-%d')
+                except:
+                    return None
+
+        # Handle selectbox - ensure string
+        if column_type == 'selectbox':
+            return str(value).strip() if value else None
+
+        # Handle text - ensure string, convert NA/None/'' to None
+        if column_type == 'text':
+            if pd.isna(value) or value is None or value == '':
+                return None
+            return str(value).strip() if value else None
+
+        # Return as-is for numbers
+        return value
+
+    @staticmethod
+    def load_data_from_db():
+        """
+        Load data from MySQL database
+
+        Returns:
+            pd.DataFrame: Loaded dataframe with proper type conversions
+        """
+        db = None
         try:
-            # Get list of columns we want to load from config
-            from config.config import COLUMN_DEFINITIONS, get_configured_columns
-            configured_columns = get_configured_columns()
+            # Connect to database
+            db = DataObject(database=DB_CONFIG['database'])
+            db.connect(
+                host=DB_CONFIG['host'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                port=DB_CONFIG['port']
+            )
 
-            # Read CSV - only load configured columns that exist in the CSV
-            df = pd.read_csv(CSV_PATH)
+            # Load migration metadata
+            records = db.load_migration_metadata()
 
-            # Filter to only keep columns that are in our configuration
-            available_columns = [col for col in configured_columns if col in df.columns]
-            df = df[available_columns]
+            if not records:
+                return pd.DataFrame()
 
-            # Replace 'None' string with empty string for all columns
-            df = df.replace('None', '')
+            # Convert to DataFrame
+            df = pd.DataFrame(records)
 
-            # Get all text columns from config (not number, selectbox, or checkbox)
-            text_columns = [
-                col for col, col_def in COLUMN_DEFINITIONS.items()
-                if col_def.get('type') == 'text' and col in df.columns
-            ]
+            # Apply type conversions for each column
+            for col in df.columns:
+                if col in COLUMN_DEFINITIONS:
+                    col_type = COLUMN_DEFINITIONS[col].get('type', 'text')
+                    df[col] = df[col].apply(lambda x: DataManager._convert_db_to_pandas(x, col_type))
+                    if col_type == 'date':
+                        df[col] = pd.to_datetime(df[col], errors='coerce')            # Ensure all configured columns exist
+            
+            configured_columns = [col for col in COLUMN_DEFINITIONS.keys() if col != 'select']
+            for col in configured_columns:
+                if col not in df.columns:
+                    col_type = COLUMN_DEFINITIONS[col].get('type', 'text')
+                    if col_type == 'date':
+                        df[col] = pd.NaT
+                    elif col_type == 'number':
+                        df[col] = pd.NA
+                    else:
+                        df[col] = pd.NA
 
-            # Fill NaN values with empty strings for all text columns
-            for col in text_columns:
-                df[col] = df[col].fillna('')
+            # Reorder columns according to COLUMN_DEFINITIONS
+            column_order = [col for col in COLUMN_DEFINITIONS.keys() if col in df.columns and col != 'select']
+            df = df[column_order]
 
-            # Drop rows where all values are NaN
-            df = df.dropna(how='all')
-
-            # Drop rows where all values are empty strings or whitespace
-            df = df[~df.apply(lambda row: row.astype(str).str.strip().eq('').all(), axis=1)]
-
-            # Reset index after dropping rows
+            # Reset index
             df = df.reset_index(drop=True)
 
             return df
-        except FileNotFoundError:
-            raise FileNotFoundError(f"CSV file not found at: {CSV_PATH}")
+
         except Exception as e:
-            raise Exception(f"Error loading CSV: {str(e)}")
+            raise Exception(f"Error loading data from database: {str(e)}")
+        finally:
+            if db:
+                db.disconnect()
 
     @staticmethod
-    def save_data_to_csv(df, include_select=False):
+    def save_data_to_db(df, changed_indices):
         """
-        Save dataframe to CSV file
+        Save updated data back to database
+        Only updates rows that have changed and only the editable columns
 
         Args:
-            df: DataFrame to save
-            include_select: Whether to include the 'select' column
+            df: DataFrame with updated data
+            changed_indices: List of row indices that have changed
 
         Returns:
-            bool: Success status
+            tuple: (success_count, error_list)
         """
+        db = None
+        success_count = 0
+        errors = []
+
         try:
-            # Remove select column if it exists and not requested
-            if not include_select and 'select' in df.columns:
-                df = df.drop(columns=['select'])
+            # Connect to database
+            db = DataObject(database=DB_CONFIG['database'])
+            db.connect(
+                host=DB_CONFIG['host'],
+                user=DB_CONFIG['user'],
+                password=DB_CONFIG['password'],
+                port=DB_CONFIG['port']
+            )
 
-            # Drop rows where all values are NaN
-            df = df.dropna(how='all')
+            # Process each changed row
+            for idx in changed_indices:
+                try:
+                    row = df.iloc[idx]
+                    row_id = int(row['id'])
 
-            # Drop rows where all values are empty strings or whitespace
-            df = df[~df.apply(lambda row: row.astype(str).str.strip().eq('').all(), axis=1)]
+                    # Build updates dictionary for editable columns only
+                    updates = {}
+                    for col in EDITABLE_DB_COLUMNS:
+                        if col in df.columns:
+                            col_type = COLUMN_DEFINITIONS[col].get('type', 'text')
+                            db_value = DataManager._convert_pandas_to_db(row[col], col_type)
+                            updates[col] = db_value
 
-            # Reset index before saving
-            df = df.reset_index(drop=True)
+                    # Update database
+                    if updates:
+                        db.update_migration_metadata(row_id, updates)
+                        success_count += 1
 
-            df.to_csv(CSV_PATH, index=False)
-            return True
+                except Exception as e:
+                    errors.append(f"Row {idx} (ID: {row_id}): {str(e)}")
+
+            return success_count, errors
+
         except Exception as e:
-            raise Exception(f"Error saving CSV: {str(e)}")
+            raise Exception(f"Error saving data to database: {str(e)}")
+        finally:
+            if db:
+                db.disconnect()
 
     @staticmethod
     def get_changed_rows(original_df, edited_df):
         """
         Compare two dataframes and return changed rows
+        Only considers editable columns for change detection
 
         Args:
             original_df: Original dataframe
@@ -104,10 +219,29 @@ class DataManager:
 
         # Remove select column for comparison
         edited_clean = edited_df.drop(columns=['select'], errors='ignore')
+        original_clean = original_df.drop(columns=['select'], errors='ignore')
+
+        # Get editable columns
+        editable_cols = [col for col in EDITABLE_DB_COLUMNS if col in edited_clean.columns]
 
         changed_indices = []
-        for idx in range(min(len(original_df), len(edited_clean))):
-            if not original_df.iloc[idx].equals(edited_clean.iloc[idx]):
+        for idx in range(min(len(original_clean), len(edited_clean))):
+            row_changed = False
+            for col in editable_cols:
+                orig_val = original_clean.at[idx, col]
+                edit_val = edited_clean.at[idx, col]
+
+                # Safe comparison handling NA values
+                if pd.isna(orig_val) and pd.isna(edit_val):
+                    continue
+                elif pd.isna(orig_val) or pd.isna(edit_val):
+                    row_changed = True
+                    break
+                elif orig_val != edit_val:
+                    row_changed = True
+                    break
+
+            if row_changed:
                 changed_indices.append(idx)
 
         if changed_indices:
@@ -153,16 +287,14 @@ class DataManager:
     @staticmethod
     def add_select_column(df):
         """
-        Add select column if it doesn't exist
-
-        Args:
-            df: DataFrame
-
-        Returns:
-            pd.DataFrame: DataFrame with select column
+        Add select column at the end if it doesn't exist, or move it to the end.
         """
         if 'select' not in df.columns:
-            df['select'] = False
+            df['select'] = False  # appends to the end
+        else:
+            # move existing column to the end
+            col = df.pop('select')
+            df['select'] = col
         return df
 
     @staticmethod

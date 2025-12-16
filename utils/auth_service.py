@@ -72,7 +72,6 @@ class AuthService:
     @staticmethod
     def authenticate_user(username, password):
         """Authenticate user with username and password"""
-        time.sleep(2)
         if username in ALLOWED_USERS and ALLOWED_USERS[username] == password:
             return True
         return False

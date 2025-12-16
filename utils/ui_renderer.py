@@ -51,6 +51,12 @@ class UIRenderer:
                         options=col_def["options"],
                         required=col_def.get("required", False)
                     )
+                elif col_def["type"] == "date":
+                    editor_column_config[col_name] = st.column_config.DateColumn(
+                        col_def["display_name"],
+                        format="YYYY-MM-DD",
+                        required=col_def.get("required", False)
+                    )
                 elif col_def["type"] == "number":
                     editor_column_config[col_name] = st.column_config.NumberColumn(
                         col_def["display_name"]
