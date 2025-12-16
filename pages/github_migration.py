@@ -80,6 +80,7 @@ def _values_different(old_value, new_value):
         return True
     return old_value != new_value
 
+@st.fragment
 def process_refresh():
     """Process data refresh operation"""
     # Render the table with reduced opacity
@@ -95,10 +96,10 @@ def process_refresh():
     </style>
     """, unsafe_allow_html=True)
 
-    # Show the table
+    # Show the table (same table position, just visually dimmed)
     UIRenderer.render_data_table(display_data)
 
-    # Show spinner with message below the table
+    # Show spinner with message
     with UIRenderer.show_spinner("Refreshing data..."):
         # Refresh data
         success, data, error = MigrationService.refresh_data()
@@ -117,8 +118,10 @@ def process_refresh():
     st.rerun()
 
 
+@st.fragment
 def process_save():
     """Process save operation"""
+    # Render the table with reduced opacity
     display_data = DataManager.add_select_column(st.session_state.data.copy())
 
     st.markdown("""
@@ -130,6 +133,7 @@ def process_save():
     </style>
     """, unsafe_allow_html=True)
 
+    # Show the table (same table position, just visually dimmed)
     UIRenderer.render_data_table(display_data)
 
     with UIRenderer.show_spinner("Saving changes..."):
@@ -173,9 +177,10 @@ def process_save():
     st.rerun()
 
 
+@st.fragment
 def process_fetch_status():
     """Process JIRA status fetch operation"""
-    # Render the table with reduced opacity
+    # Render the table with reduced opacity and current selections
     display_data = DataManager.add_select_column(st.session_state.data.copy())
     for idx in st.session_state.selected_rows:
         display_data.at[idx, 'select'] = True
@@ -190,7 +195,7 @@ def process_fetch_status():
     </style>
     """, unsafe_allow_html=True)
 
-    # Show the table
+    # Show the table (same table position, just visually dimmed)
     UIRenderer.render_data_table(display_data)
 
     # Get list of JIRA ticket IDs for selected rows
@@ -200,7 +205,7 @@ def process_fetch_status():
     ]
     jira_tickets_str = ", ".join(jira_tickets)
 
-    # Show spinner with message below the table
+    # Show spinner with message
     with UIRenderer.show_spinner(
         f"Fetching JIRA status for: {jira_tickets_str}"
     ):
@@ -226,6 +231,29 @@ def process_fetch_status():
     st.rerun()
 
 
+@st.fragment
+def render_changed_rows_fragment(changed_rows, changed_indices):
+    """Render changed rows with discard actions"""
+    if changed_rows.empty:
+        return
+
+    discarded_indices = UIRenderer.render_changed_rows(
+        changed_rows,
+        changed_indices
+    )
+
+    for idx in discarded_indices:
+        EventHandler.handle_discard_row(st.session_state, st, idx)
+
+
+@st.fragment
+def render_admin_fragment():
+    """Render admin-only section"""
+    if AuthService.is_admin():
+        render_admin_section()
+
+
+@st.fragment
 def render_main_view():
     """Render the main application view (header already rendered in main())"""
     # Get current data (no filters applied)
@@ -275,20 +303,11 @@ def render_main_view():
     if fetch_clicked:
         EventHandler.handle_fetch_status(st.session_state, st)
 
-    # Render changed rows section
-    if not changed_rows.empty:
-        discarded_indices = UIRenderer.render_changed_rows(
-            changed_rows,
-            changed_indices
-        )
+    # Render changed rows section (fragment)
+    render_changed_rows_fragment(changed_rows, changed_indices)
 
-        # Handle discard clicks
-        for idx in discarded_indices:
-            EventHandler.handle_discard_row(st.session_state, st, idx)
-
-    # Show statistics (for admin users)
-    if AuthService.is_admin():
-        render_admin_section()
+    # Show statistics (for admin users) via fragment
+    render_admin_fragment()
 
     # Render footer
     st.markdown("---")
