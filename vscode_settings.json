@@ -1,0 +1,27 @@
+{
+    "editor.fontFamily": "SF Mono, Menlo, Monaco, 'Courier New', monospace",
+    "editor.fontLigatures": true,
+    // "leetcode.workspaceFolder": "/Users/siva/.leetcode",
+    // "leetcode.defaultLanguage": "python3",
+    "workbench.colorTheme": "Solarized Light",  // Light UI Theme
+    "editor.fontVariations": false,
+    "editor.fontSize": 14,
+    "editor.fontWeight": "normal",
+    "workbench.productIconTheme": "macos-modern",
+
+    "workbench.colorCustomizations": {
+        "[Solarized Light]": {
+            "editor.background": "#1E1E1E",  // Dark editor
+            "editor.foreground": "#D4D4D4",
+            "editor.selectionBackground": "#2C2C2C",
+            "editor.lineHighlightBackground": "#292929",
+            "editorCursor.foreground": "#FFD700",
+            "editorInlayHint.foreground": "#808080"
+        }
+    },
+    "files.autoSave": "onFocusChange",
+    "editor.dropIntoEditor.preferences": [
+
+    ]
+}
+
