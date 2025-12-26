@@ -4,6 +4,8 @@ Contains common functionality for all pages
 """
 import streamlit as st
 from typing import Literal
+from pathlib import Path
+import base64
 from utils.auth_service import AuthService
 
 
@@ -15,6 +17,46 @@ class BasePage:
         'layout': 'wide',
         'initial_sidebar_state': 'expanded'
     }
+
+    @staticmethod
+    def _get_logo_base64():
+        import os
+        """Get base64 encoded logo for CSS injection"""
+        logo_path = '/Users/siva/web_developments/streamlit_app/ms_logo.png'
+        if os.path.exists(logo_path):
+            with open(logo_path, "rb") as f:
+                data = f.read()
+                return base64.b64encode(data).decode()
+        return None
+
+    @staticmethod
+    def _inject_sidebar_logo():
+        """Inject logo at the top of sidebar using CSS"""
+        logo_base64 = BasePage._get_logo_base64()
+
+        if logo_base64:
+            st.markdown(f"""
+                <style>
+                    /* Add logo at the very top of sidebar */
+                    [data-testid="stSidebar"] {{
+                        background-image: url("data:image/png;base64,{logo_base64}");
+                        background-repeat: no-repeat;
+                        background-position: center 20px;
+                        background-size: 180px auto;
+                        padding-top: 100px !important;
+                    }}
+                    
+                    /* Adjust sidebar content to accommodate logo */
+                    [data-testid="stSidebar"] > div:first-child {{
+                        padding-top: 20px;
+                    }}
+                    
+                    /* Ensure navigation starts below logo */
+                    section[data-testid="stSidebar"] > div {{
+                        padding-top: 0px;
+                    }}
+                </style>
+            """, unsafe_allow_html=True)
 
     @staticmethod
     def setup_page(page_title: str, page_icon: str = "🏠"):
@@ -34,6 +76,9 @@ class BasePage:
 
         # Hide deploy button
         BasePage._hide_deploy_button()
+
+        # Inject sidebar logo
+        BasePage._inject_sidebar_logo()
 
         # Initialize authentication session
         AuthService.initialize_session()
@@ -129,44 +174,27 @@ class BasePage:
             text: Footer text to display
         """
         st.markdown("---")
-        st.markdown(f"""
-        <div style='text-align: center; color: #666; padding: 20px;'>
-            <p>{text}</p>
-        </div>
-        """, unsafe_allow_html=True)
+        st.caption(text)
 
     @staticmethod
     def render_login_form():
-        """Render login form"""
-        if not AuthService.is_authenticated() and st.session_state.get('show_login_form', False):
-            col_left, col_center, col_right = st.columns([1, 2, 1])
+        """Render login form if user is not authenticated"""
+        if not AuthService.is_authenticated():
+            with st.container():
+                st.info("🔐 Please login to access all features")
 
-            with col_center:
-                st.subheader("🔐 Login")
+                col1, col2, col3 = st.columns([1, 2, 1])
 
-                with st.form("login_form"):
-                    username = st.text_input("Username", key="login_username")
-                    password = st.text_input("Password", type="password", key="login_password")
+                with col2:
+                    with st.form("login_form"):
+                        st.markdown("### Login")
+                        username = st.text_input("Username")
+                        password = st.text_input("Password", type="password")
+                        submit = st.form_submit_button("Login", use_container_width=True)
 
-                    col_submit, col_cancel = st.columns(2)
-                    with col_submit:
-                        submit = st.form_submit_button("Login", width="stretch")
-                    with col_cancel:
-                        cancel = st.form_submit_button("Cancel", width="stretch")
-
-                    if submit:
-                        if username and password:
-                            with st.spinner("Authenticating..."):
-                                if AuthService.login(username, password):
-                                    st.session_state.show_login_form = False
-                                    st.rerun()
-                                else:
-                                    st.error("Invalid username or password")
-                        else:
-                            st.warning("Please enter both username and password")
-
-                    if cancel:
-                        st.session_state.show_login_form = False
-                        st.rerun()
-
-                st.markdown("---")
+                        if submit:
+                            if AuthService.login(username, password):
+                                st.success("Login successful!")
+                                st.rerun()
+                            else:
+                                st.error("Invalid credentials")

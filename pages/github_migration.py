@@ -206,45 +206,33 @@ def process_save():
             UIRenderer.show_info("No changes to save.")
             time.sleep(SUCCESS_MESSAGE_DELAY)
             st.rerun()
+            return
 
-        # Validate data before saving
-        is_valid, errors = MigrationService.validate_data(st.session_state.data)
+        # Try to save
+        success, error_msg = MigrationService.save_changes(
+            st.session_state.data,
+            changed_indices
+        )
 
-        if not is_valid:
-            SessionManager.set_saving(st.session_state, False)
-            UIRenderer.show_error(f"Validation failed: {', '.join(errors)}")
-            time.sleep(ERROR_MESSAGE_DELAY)
+        if success:
+            # Update original data to match current
+            st.session_state.original_data = st.session_state.data.copy()
+            UIRenderer.show_success("✓ Changes saved successfully")
         else:
-            success, error = MigrationService.save_changes(
-                st.session_state.data,
-                changed_indices
-            )
+            UIRenderer.show_error(f"Error saving changes: {error_msg}")
 
-            if success:
-                actual_data = st.session_state.data.drop(columns=['select'], errors='ignore')
-                SessionManager.update_original_data(st.session_state, actual_data.copy())
-                SessionManager.update_data(st.session_state, actual_data.copy())
-                SessionManager.set_saving(st.session_state, False)
-                UIRenderer.show_success("Data saved successfully!")
-                time.sleep(SUCCESS_MESSAGE_DELAY)
-            else:
-                SessionManager.set_saving(st.session_state, False)
-                UIRenderer.show_error(f"Error saving data: {error}")
-                time.sleep(ERROR_MESSAGE_DELAY)
-
+    SessionManager.set_saving(st.session_state, False)
+    time.sleep(SUCCESS_MESSAGE_DELAY)
     st.rerun()
 
 
 @st.fragment
 def process_fetch_status():
     """Process JIRA status fetch operation"""
-    # Render the (filtered) table with reduced opacity and current selections
+    # Render the (filtered) table with reduced opacity
     base_data = _apply_column_filters(st.session_state.data.copy())
     display_data = DataManager.add_select_column(base_data)
-    for idx in st.session_state.selected_rows:
-        display_data.at[idx, 'select'] = True
 
-    # Add CSS to dim the table
     st.markdown("""
     <style>
     div[data-testid="stDataFrame"] {
@@ -257,26 +245,23 @@ def process_fetch_status():
     # Show the table (same table position, just visually dimmed)
     UIRenderer.render_data_table(display_data)
 
-    # Get list of JIRA ticket IDs for selected rows
-    jira_tickets = [
-        st.session_state.data.at[idx, 'jira_ticket']
-        for idx in st.session_state.selected_rows
-    ]
-    jira_tickets_str = ", ".join(jira_tickets)
+    with UIRenderer.show_spinner("Fetching JIRA status..."):
+        selected_rows = st.session_state.selected_rows
 
-    # Show spinner with message
-    with UIRenderer.show_spinner(
-        f"Fetching JIRA status for: {jira_tickets_str}"
-    ):
-        # Fetch JIRA statuses
-        success, updated_data, error = MigrationService.fetch_jira_statuses(
+        if not selected_rows:
+            UIRenderer.show_warning("No rows selected")
+            SessionManager.set_fetching_status(st.session_state, False)
+            time.sleep(ERROR_MESSAGE_DELAY)
+            st.rerun()
+            return
+
+        # Fetch JIRA status
+        success, actual_data, error, jira_tickets_str = MigrationService.fetch_jira_status_for_rows(
             st.session_state.data,
-            st.session_state.selected_rows
+            selected_rows
         )
 
         if success:
-            # Update session state
-            actual_data = updated_data.drop(columns=['select'], errors='ignore')
             SessionManager.update_original_data(st.session_state, actual_data.copy())
             SessionManager.update_data(st.session_state, actual_data.copy())
 
