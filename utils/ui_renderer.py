@@ -33,6 +33,22 @@ class UIRenderer:
         Returns:
             pd.DataFrame: Edited dataframe
         """
+        # Inject CSS for alternating row colors
+        st.markdown("""
+            <style>
+                /* Alternating row colors for data editor */
+                div[data-testid="stDataFrame"] tbody tr:nth-child(even) {
+                    background-color: #f0f2f6;
+                }
+                div[data-testid="stDataFrame"] tbody tr:nth-child(odd) {
+                    background-color: #ffffff;
+                }
+                div[data-testid="stDataFrame"] tbody tr:hover {
+                    background-color: #e1e4e8;
+                }
+            </style>
+        """, unsafe_allow_html=True)
+
         # Build column config for st.data_editor
         editor_column_config = {}
 
