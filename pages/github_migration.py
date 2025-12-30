@@ -120,21 +120,22 @@ def _render_filters_sidebar():
 def _apply_column_filters(df):
     """Return a filtered copy of df based on current column_filters."""
     _init_column_filters()
-    filtered = df
 
-    for col, term in st.session_state.column_filters.items():
-        if not term:
-            continue
-        if col not in filtered.columns:
-            continue
+    # Collect all filter conditions to apply in one operation
+    active_filters = {col: term for col, term in st.session_state.column_filters.items()
+                     if term and col in df.columns}
+
+    if not active_filters:
+        return df
+
+    # Create boolean mask combining all filters
+    mask = pd.Series([True] * len(df), index=df.index)
+
+    for col, term in active_filters.items():
         # Case-insensitive substring match on stringified values
-        filtered = filtered[
-            filtered[col]
-            .astype(str)
-            .str.contains(term, case=False, na=False)
-        ]
+        mask &= df[col].astype(str).str.contains(term, case=False, na=False)
 
-    return filtered
+    return df[mask]
 
 @st.fragment
 def process_refresh():
@@ -317,9 +318,11 @@ def render_main_view():
     # Update data with edits (exclude select column)
     edited_clean = edited_data.drop(columns=['select'], errors='ignore')
 
-    # Track if we made any actual changes
+    # Track if we made any actual changes - optimized with early exit
     has_updates = False
     for idx in edited_clean.index:
+        if has_updates:
+            break
         for col in edited_clean.columns:
             if col in st.session_state.data.columns:
                 old_value = st.session_state.data.at[idx, col]

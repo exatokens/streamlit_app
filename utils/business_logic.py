@@ -54,33 +54,37 @@ class MigrationService:
     def fetch_jira_statuses(data, selected_indices):
         """
         Fetch JIRA statuses for selected rows
-        
+
         Args:
             data: DataFrame containing the data
             selected_indices: List of row indices to update
-            
+
         Returns:
             tuple: (success, updated_data, error_message)
         """
         try:
+            # Filter out rows without valid JIRA tickets upfront
             status_map = {}
-            
+
             for idx in selected_indices:
                 jira_ticket = data.at[idx, 'jira_ticket']
-                if jira_ticket and jira_ticket != '':
+                if jira_ticket and str(jira_ticket).strip() not in ('', 'None', 'nan'):
                     new_status = fetch_jira_status(jira_ticket)
                     status_map[idx] = new_status
-            
-            # Update data
+
+            if not status_map:
+                return True, data, None
+
+            # Update data - avoid unnecessary copy if no changes
             updated_data = DataManager.update_jira_status(
                 data.copy(),
-                selected_indices,
+                list(status_map.keys()),
                 status_map
             )
-            
+
             # Note: JIRA status updates would need to be saved separately
             # since jira_status is not in EDITABLE_DB_COLUMNS
-            
+
             return True, updated_data, None
         except Exception as e:
             return False, data, str(e)
