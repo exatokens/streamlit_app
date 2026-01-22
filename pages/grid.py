@@ -1,0 +1,144 @@
+import streamlit as st
+import pandas as pd
+import numpy as np
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
+
+# --- 1. INITIAL SETUP ---
+st.set_page_config(page_title="MySQL Inventory Editor", layout="wide")
+
+if 'master_df' not in st.session_state:
+    # Simulating your MySQL data
+    st.session_state.master_df = pd.DataFrame({
+        'id': range(101, 126),
+        'repo_name': [f"service-mesh-{i}" for i in range(25)],
+        'status': np.random.choice(['Legacy', 'Verified', 'Migrated'], 25),
+        'owner': np.random.choice(['Infra', 'DevOps', 'Security'], 25),
+        'last_audit': pd.Timestamp.now().strftime('%Y-%m-%d')
+    })
+
+if 'grid_key' not in st.session_state:
+    st.session_state.grid_key = 0
+
+def reset_view():
+    st.session_state.grid_key += 1
+    st.rerun()
+
+# --- 2. STYLING & JAVASCRIPT ---
+# Dynamic Colors for the Status column
+cells_style_jscode = JsCode("""
+function(params) {
+    if (params.value === 'Verified') {
+        return {'color': 'white', 'backgroundColor': '#28a745'};
+    } else if (params.value === 'Legacy') {
+        return {'color': 'white', 'backgroundColor': '#dc3545'};
+    } else if (params.value === 'Migrated') {
+        return {'color': 'black', 'backgroundColor': '#ffc107'};
+    }
+}
+""")
+
+# Row button to quickly select/focus a row
+cell_button_js = JsCode("""
+    class ClickableRenderer {
+        init(params) {
+            this.eGui = document.createElement('div');
+            this.eGui.innerHTML = `
+                <button style="background-color: #6c757d; color: white; border: none; 
+                border-radius: 4px; padding: 2px 10px; cursor: pointer; font-size: 11px; width: 100%;">
+                    Select 🎯
+                </button>`;
+            this.button = this.eGui.querySelector('button');
+            this.button.addEventListener('click', () => { params.node.setSelected(true); });
+        }
+        getGui() { return this.eGui; }
+    }
+""")
+
+st.title("🗄️ MySQL Inventory Editor")
+st.markdown("Use column headers to **Search/Filter**. Edits are tracked at the bottom.")
+
+# --- 3. GRID CONFIGURATION ---
+gb = GridOptionsBuilder.from_dataframe(st.session_state.master_df)
+
+# Default: Every column is searchable via the funnel icon
+gb.configure_default_column(editable=True, filter=True, sortable=True, resizable=True)
+
+# Specific Column Customization
+gb.configure_column("status", cellStyle=cells_style_jscode)
+gb.configure_column("id", pinned='left', editable=False, cellStyle={'fontWeight': 'bold'})
+gb.configure_column("Select", headerName="Focus", cellRenderer=cell_button_js, width=90, pinned='right', editable=False)
+
+# Theme and Zebra Striping
+gb.configure_grid_options(
+    rowHeight=35,
+    rowSelection='single',
+    rowClassRules={'row-grey': 'node.rowIndex % 2 === 0'}
+)
+gb.configure_pagination(paginationPageSize=15)
+gb.configure_side_bar() # Adds a pro-level search drawer on the right
+grid_options = gb.build()
+
+# Action Bar
+col_spacer, col_reset = st.columns([4, 1])
+with col_reset:
+    st.button("🧹 Clear All Filters", on_click=reset_view, use_container_width=True)
+
+# Render Grid
+grid_response = AgGrid(
+    st.session_state.master_df,
+    gridOptions=grid_options,
+    key=f"inv_grid_{st.session_state.grid_key}",
+    allow_unsafe_jscode=True,
+    update_mode=GridUpdateMode.MODEL_CHANGED,
+    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+    theme='balham', 
+    height=500,
+    custom_css={".row-grey": {"background-color": "#f9f9f9 !important"}}
+)
+
+# --- 4. DATA SYNC & DIFF LOGIC ---
+raw_updated_df = pd.DataFrame(grid_response['data'])
+
+if not raw_updated_df.empty:
+    # Safe Column Intersection
+    common_cols = [c for c in st.session_state.master_df.columns if c in raw_updated_df.columns]
+    updated_df = raw_updated_df[common_cols].copy()
+
+    # Align Data Types
+    for col in common_cols:
+        updated_df[col] = updated_df[col].astype(st.session_state.master_df[col].dtype)
+
+    # Compare Master vs Updated
+    comparison_df = st.session_state.master_df.merge(updated_df, on='id', suffixes=('_old', '_new'))
+    
+    changed_rows_list = []
+    for _, row in comparison_df.iterrows():
+        changes = {col: {'old': row[f"{col}_old"], 'new': row[f"{col}_new"]} 
+                   for col in common_cols if col != 'id' and row[f"{col}_old"] != row[f"{col}_new"]}
+        if changes:
+            changed_rows_list.append({'id': row['id'], 'changes': changes})
+
+    # --- 5. REVIEW PANEL ---
+    if changed_rows_list:
+        st.divider()
+        st.subheader(f"📝 Review Pending Updates ({len(changed_rows_list)})")
+        
+        for item in changed_rows_list:
+            with st.container(border=True):
+                c_id, c_diff, c_act = st.columns([1, 4, 1])
+                c_id.write(f"**ID:** `{item['id']}`")
+                with c_diff:
+                    # Show exactly what changed in this row
+                    for col, vals in item['changes'].items():
+                        st.markdown(f"**{col.upper()}**: `{vals['old']}` → :green[**{vals['new']}**]")
+                if c_act.button("Discard", key=f"disc_{item['id']}", use_container_width=True):
+                    reset_view()
+
+        st.write("##")
+        b1, b2 = st.columns([1, 4])
+        if b1.button("🚀 Sync to MySQL", type="primary", use_container_width=True):
+            st.session_state.master_df = updated_df.copy()
+            st.success("Database Synchronized!")
+            st.rerun()
+        if b2.button("Discard All Edits"):
+            reset_view()
