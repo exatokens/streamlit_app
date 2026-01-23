@@ -1,6 +1,8 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import random
+from datetime import datetime, timedelta
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode, JsCode
 
 # --- 1. INITIAL SETUP ---
@@ -21,7 +23,6 @@ if 'grid_key' not in st.session_state:
 
 def reset_view():
     st.session_state.grid_key += 1
-    st.rerun()
 
 # --- 2. STYLING & JAVASCRIPT ---
 # Dynamic Colors for the Status column
@@ -37,20 +38,28 @@ function(params) {
 }
 """)
 
-# Row button to quickly select/focus a row
-cell_button_js = JsCode("""
-    class ClickableRenderer {
+# Update button - directly triggers update when clicked
+update_button_js = JsCode("""
+    class UpdateButtonRenderer {
         init(params) {
+            this.params = params;
             this.eGui = document.createElement('div');
             this.eGui.innerHTML = `
-                <button style="background-color: #6c757d; color: white; border: none; 
+                <button style="background-color: #007bff; color: white; border: none;
                 border-radius: 4px; padding: 2px 10px; cursor: pointer; font-size: 11px; width: 100%;">
-                    Select 🎯
+                    Update
                 </button>`;
             this.button = this.eGui.querySelector('button');
-            this.button.addEventListener('click', () => { params.node.setSelected(true); });
+            this.button.addEventListener('click', () => {
+                // First deselect all, then select this row to ensure event fires
+                params.api.deselectAll();
+                setTimeout(() => {
+                    params.node.setSelected(true, true);
+                }, 50);
+            });
         }
         getGui() { return this.eGui; }
+        refresh(params) { return true; }
     }
 """)
 
@@ -66,7 +75,7 @@ gb.configure_default_column(editable=True, filter=True, sortable=True, resizable
 # Specific Column Customization
 gb.configure_column("status", cellStyle=cells_style_jscode)
 gb.configure_column("id", pinned='left', editable=False, cellStyle={'fontWeight': 'bold'})
-gb.configure_column("Select", headerName="Focus", cellRenderer=cell_button_js, width=90, pinned='right', editable=False)
+gb.configure_column("Update", headerName="Action", cellRenderer=update_button_js, width=90, pinned='right', editable=False)
 
 # Theme and Zebra Striping
 gb.configure_grid_options(
@@ -89,12 +98,39 @@ grid_response = AgGrid(
     gridOptions=grid_options,
     key=f"inv_grid_{st.session_state.grid_key}",
     allow_unsafe_jscode=True,
-    update_mode=GridUpdateMode.MODEL_CHANGED,
+    update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.MODEL_CHANGED,
     data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-    theme='balham', 
+    theme='balham',
     height=500,
     custom_css={".row-grey": {"background-color": "#f9f9f9 !important"}}
 )
+
+# --- HANDLE SINGLE ROW UPDATE (Auto-update on selection) ---
+selected_rows = grid_response.get('selected_rows', None)
+if selected_rows is not None and len(selected_rows) > 0:
+    # Get the selected row data
+    if isinstance(selected_rows, pd.DataFrame):
+        selected_row = selected_rows.iloc[0].to_dict()
+    elif isinstance(selected_rows, list) and len(selected_rows) > 0:
+        selected_row = selected_rows[0]
+    else:
+        selected_row = None
+
+    if selected_row:
+        row_id = selected_row.get('id')
+
+        # Generate a random date within the last 30 days
+        random_days = random.randint(1, 30)
+        new_date = (datetime.now() - timedelta(days=random_days)).strftime('%Y-%m-%d')
+
+        # Update only this row's last_audit field
+        st.session_state.master_df.loc[
+            st.session_state.master_df['id'] == row_id, 'last_audit'
+        ] = new_date
+
+        st.toast(f"Row {row_id} date updated to {new_date}!", icon="✅")
+        st.session_state.grid_key += 1
+        st.rerun()
 
 # --- 4. DATA SYNC & DIFF LOGIC ---
 raw_updated_df = pd.DataFrame(grid_response['data'])
