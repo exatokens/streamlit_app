@@ -66,71 +66,81 @@ update_button_js = JsCode("""
 st.title("🗄️ MySQL Inventory Editor")
 st.markdown("Use column headers to **Search/Filter**. Edits are tracked at the bottom.")
 
-# --- 3. GRID CONFIGURATION ---
-gb = GridOptionsBuilder.from_dataframe(st.session_state.master_df)
+@st.fragment
+def render_grid():
+    """Fragment that only reruns the grid portion, not the whole page."""
+    # --- 3. GRID CONFIGURATION ---
+    gb = GridOptionsBuilder.from_dataframe(st.session_state.master_df)
 
-# Default: Every column is searchable via the funnel icon
-gb.configure_default_column(editable=True, filter=True, sortable=True, resizable=True)
+    # Default: Every column is searchable via the funnel icon
+    gb.configure_default_column(editable=True, filter=True, sortable=True, resizable=True)
 
-# Specific Column Customization
-gb.configure_column("status", cellStyle=cells_style_jscode)
-gb.configure_column("id", pinned='left', editable=False, cellStyle={'fontWeight': 'bold'})
-gb.configure_column("Update", headerName="Action", cellRenderer=update_button_js, width=90, pinned='right', editable=False)
+    # Specific Column Customization
+    gb.configure_column("status", cellStyle=cells_style_jscode)
+    gb.configure_column("id", pinned='left', editable=False, cellStyle={'fontWeight': 'bold'})
+    gb.configure_column("Update", headerName="Action", cellRenderer=update_button_js, width=90, pinned='right', editable=False)
 
-# Theme and Zebra Striping
-gb.configure_grid_options(
-    rowHeight=35,
-    rowSelection='single',
-    rowClassRules={'row-grey': 'node.rowIndex % 2 === 0'}
-)
-gb.configure_pagination(paginationPageSize=15)
-gb.configure_side_bar() # Adds a pro-level search drawer on the right
-grid_options = gb.build()
+    # Theme and Zebra Striping
+    gb.configure_grid_options(
+        rowHeight=35,
+        rowSelection='single',
+        rowClassRules={'row-grey': 'node.rowIndex % 2 === 0'}
+    )
+    gb.configure_pagination(paginationPageSize=15)
+    gb.configure_side_bar()
+    grid_options = gb.build()
 
-# Action Bar
-col_spacer, col_reset = st.columns([4, 1])
-with col_reset:
-    st.button("🧹 Clear All Filters", on_click=reset_view, use_container_width=True)
+    # Action Bar
+    col_spacer, col_reset = st.columns([4, 1])
+    with col_reset:
+        if st.button("🧹 Clear All Filters", use_container_width=True):
+            st.session_state.grid_key += 1
+            st.rerun(scope="fragment")
 
-# Render Grid
-grid_response = AgGrid(
-    st.session_state.master_df,
-    gridOptions=grid_options,
-    key=f"inv_grid_{st.session_state.grid_key}",
-    allow_unsafe_jscode=True,
-    update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.MODEL_CHANGED,
-    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-    theme='balham',
-    height=500,
-    custom_css={".row-grey": {"background-color": "#f9f9f9 !important"}}
-)
+    # Render Grid
+    grid_response = AgGrid(
+        st.session_state.master_df,
+        gridOptions=grid_options,
+        key=f"inv_grid_{st.session_state.grid_key}",
+        allow_unsafe_jscode=True,
+        update_mode=GridUpdateMode.SELECTION_CHANGED | GridUpdateMode.MODEL_CHANGED,
+        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+        theme='balham',
+        height=500,
+        custom_css={".row-grey": {"background-color": "#f9f9f9 !important"}}
+    )
 
-# --- HANDLE SINGLE ROW UPDATE (Auto-update on selection) ---
-selected_rows = grid_response.get('selected_rows', None)
-if selected_rows is not None and len(selected_rows) > 0:
-    # Get the selected row data
-    if isinstance(selected_rows, pd.DataFrame):
-        selected_row = selected_rows.iloc[0].to_dict()
-    elif isinstance(selected_rows, list) and len(selected_rows) > 0:
-        selected_row = selected_rows[0]
-    else:
-        selected_row = None
+    # --- HANDLE SINGLE ROW UPDATE (Auto-update on selection) ---
+    selected_rows = grid_response.get('selected_rows', None)
+    if selected_rows is not None and len(selected_rows) > 0:
+        # Get the selected row data
+        if isinstance(selected_rows, pd.DataFrame):
+            selected_row = selected_rows.iloc[0].to_dict()
+        elif isinstance(selected_rows, list) and len(selected_rows) > 0:
+            selected_row = selected_rows[0]
+        else:
+            selected_row = None
 
-    if selected_row:
-        row_id = selected_row.get('id')
+        if selected_row:
+            row_id = selected_row.get('id')
 
-        # Generate a random date within the last 30 days
-        random_days = random.randint(1, 30)
-        new_date = (datetime.now() - timedelta(days=random_days)).strftime('%Y-%m-%d')
+            # Generate a random date within the last 30 days
+            random_days = random.randint(1, 30)
+            new_date = (datetime.now() - timedelta(days=random_days)).strftime('%Y-%m-%d')
 
-        # Update only this row's last_audit field
-        st.session_state.master_df.loc[
-            st.session_state.master_df['id'] == row_id, 'last_audit'
-        ] = new_date
+            # Update only this row's last_audit field
+            st.session_state.master_df.loc[
+                st.session_state.master_df['id'] == row_id, 'last_audit'
+            ] = new_date
 
-        st.toast(f"Row {row_id} date updated to {new_date}!", icon="✅")
-        st.session_state.grid_key += 1
-        st.rerun()
+            st.toast(f"Row {row_id} date updated to {new_date}!", icon="✅")
+            st.session_state.grid_key += 1
+            st.rerun(scope="fragment")
+
+    return grid_response
+
+# Render the grid fragment
+grid_response = render_grid()
 
 # --- 4. DATA SYNC & DIFF LOGIC ---
 raw_updated_df = pd.DataFrame(grid_response['data'])
