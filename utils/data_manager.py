@@ -110,31 +110,40 @@ class DataManager:
             # Convert to DataFrame
             df = pd.DataFrame(records)
 
-            # Apply type conversions for each column
-            for col in df.columns:
-                if col in COLUMN_DEFINITIONS:
-                    col_type = COLUMN_DEFINITIONS[col].get('type', 'text')
-                    df[col] = df[col].apply(lambda x: DataManager._convert_db_to_pandas(x, col_type))
-                    if col_type == 'date':
-                        df[col] = pd.to_datetime(df[col], errors='coerce')            # Ensure all configured columns exist
-            
+            # Pre-compute column type mapping for efficiency
+            col_type_map = {col: COLUMN_DEFINITIONS[col].get('type', 'text')
+                           for col in df.columns if col in COLUMN_DEFINITIONS}
+
+            # Apply type conversions using vectorized operations where possible
+            for col, col_type in col_type_map.items():
+                if col_type == 'date':
+                    # Vectorized date conversion
+                    df[col] = pd.to_datetime(df[col], errors='coerce')
+                elif col_type in ('selectbox', 'text'):
+                    # Vectorized string conversion
+                    df[col] = df[col].astype(str).replace({'None': pd.NA, 'nan': pd.NA, '': pd.NA})
+                elif col_type == 'number':
+                    df[col] = pd.to_numeric(df[col], errors='coerce')
+
+            # Ensure all configured columns exist
             configured_columns = [col for col in COLUMN_DEFINITIONS.keys() if col != 'select']
-            for col in configured_columns:
-                if col not in df.columns:
-                    col_type = COLUMN_DEFINITIONS[col].get('type', 'text')
-                    if col_type == 'date':
-                        df[col] = pd.NaT
-                    elif col_type == 'number':
-                        df[col] = pd.NA
-                    else:
-                        df[col] = pd.NA
+            missing_cols = set(configured_columns) - set(df.columns)
+
+            for col in missing_cols:
+                col_type = COLUMN_DEFINITIONS[col].get('type', 'text')
+                if col_type == 'date':
+                    df[col] = pd.NaT
+                elif col_type == 'number':
+                    df[col] = pd.NA
+                else:
+                    df[col] = pd.NA
 
             # Reorder columns according to COLUMN_DEFINITIONS
             column_order = [col for col in COLUMN_DEFINITIONS.keys() if col in df.columns and col != 'select']
             df = df[column_order]
 
             # Reset index
-            df = df.reset_index(drop=True)
+            df.reset_index(drop=True, inplace=True)
 
             return df
 
@@ -221,28 +230,28 @@ class DataManager:
         edited_clean = edited_df.drop(columns=['select'], errors='ignore')
         original_clean = original_df.drop(columns=['select'], errors='ignore')
 
-        # Get editable columns
+        # Get editable columns that exist in both dataframes
         editable_cols = [col for col in EDITABLE_DB_COLUMNS if col in edited_clean.columns]
 
-        changed_indices = []
-        for idx in range(min(len(original_clean), len(edited_clean))):
-            row_changed = False
-            for col in editable_cols:
-                orig_val = original_clean.at[idx, col]
-                edit_val = edited_clean.at[idx, col]
+        if not editable_cols:
+            return pd.DataFrame(), []
 
-                # Safe comparison handling NA values
-                if pd.isna(orig_val) and pd.isna(edit_val):
-                    continue
-                elif pd.isna(orig_val) or pd.isna(edit_val):
-                    row_changed = True
-                    break
-                elif orig_val != edit_val:
-                    row_changed = True
-                    break
+        # Vectorized comparison for better performance
+        # Create a boolean mask for changed rows
+        changed_mask = pd.Series([False] * len(edited_clean), index=edited_clean.index)
 
-            if row_changed:
-                changed_indices.append(idx)
+        for col in editable_cols:
+            # Compare values, handling NA/None properly
+            orig_series = original_clean[col]
+            edit_series = edited_clean[col]
+
+            # XOR logic: changed if one is NA and other isn't, or values differ
+            col_changed = (orig_series.isna() != edit_series.isna()) | (
+                (~orig_series.isna()) & (~edit_series.isna()) & (orig_series != edit_series)
+            )
+            changed_mask |= col_changed
+
+        changed_indices = changed_mask[changed_mask].index.tolist()
 
         if changed_indices:
             return edited_clean.iloc[changed_indices].copy(), changed_indices

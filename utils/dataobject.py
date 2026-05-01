@@ -66,10 +66,7 @@ class DBConnector:
     def execute(self, query, params=None):
         """Execute a query"""
         try:
-            if params:
-                self.cursor.execute(query, params)
-            else:
-                self.cursor.execute(query)
+            self.cursor.execute(query, params) if params else self.cursor.execute(query)
             return self.cursor
         except Error as e:
             raise Exception(f"Error executing query: {e}")
@@ -142,23 +139,27 @@ class DataObject(DBConnector):
             bool: Success status
         """
         try:
-            # Build UPDATE query dynamically based on provided updates
-            allowed_columns = ['migrated_by', 'migration_start_date', 'migration_end_date', 'phase', 'comments']
+            # Pre-defined allowed columns (constant set for faster lookup)
+            ALLOWED_COLUMNS = frozenset(['migrated_by', 'migration_start_date', 'migration_end_date', 'phase', 'comments'])
 
             # Filter updates to only allowed columns
-            filtered_updates = {k: v for k, v in updates.items() if k in allowed_columns}
+            filtered_updates = {k: v for k, v in updates.items() if k in ALLOWED_COLUMNS}
 
             if not filtered_updates:
                 return True  # No updates needed
 
-            # Build SET clause
-            set_clause = ", ".join([f"{col} = %s" for col in filtered_updates.keys()])
-            values = list(filtered_updates.values())
+            # Build SET clause and values list in one pass
+            set_parts = []
+            values = []
+            for col, val in filtered_updates.items():
+                set_parts.append(f"{col} = %s")
+                values.append(val)
+
             values.append(row_id)  # Add ID for WHERE clause
 
             query = f"""
                 UPDATE migration_metadata
-                SET {set_clause}
+                SET {', '.join(set_parts)}
                 WHERE id = %s
             """
 

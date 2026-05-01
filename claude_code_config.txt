@@ -1,0 +1,31 @@
+---
+applyTo: "**"
+---
+
+# Global Claude Code Rules for Agent Mode
+
+## Agent Workflow (ALWAYS follow before coding)
+1. **Plan First**: Before writing or editing any code, output a detailed plan.
+   - Describe the overall approach.
+   - Break into numbered steps.
+   - For each step: Input (data/files needed), Output (expected result), I/O description.
+2. **Get Approval**: Wait for explicit user approval ("OK", "approved", etc.) before implementing.
+3. **No Execution Until Approved**: Stay in planning mode (use Shift+Tab if needed).
+
+## Documentation Requirements
+- Every function MUST have a docstring: purpose, parameters (type/shape), returns (type/shape), raises (if any).
+- Every class MUST have a class docstring: purpose, key methods, usage example.
+- Use Google/Numpy style for Python; JSDoc for JS/TS.
+
+## Anti-Hallucination Rules
+- Stick strictly to codebase content and provided context—do not invent APIs, behaviors, or facts.
+- If uncertain about anything (e.g., library usage), say "Uncertain—need clarification" and stop.
+- Verify assumptions by referencing specific files/lines before acting.
+- No unverified external knowledge; flag gaps explicitly.
+
+## General Style
+- Agent mode priority: Edit files, run commands only after plan approval.
+- Keep changes minimal and testable.
+- End responses with next action question if unclear.
+
+

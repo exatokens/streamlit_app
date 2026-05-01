@@ -47,11 +47,14 @@ class AuthService:
     def initialize_session():
         """Initialize authentication session state"""
         if 'authenticated' not in st.session_state:
-            st.session_state.authenticated = False
-            st.session_state.username = None
-            st.session_state.is_admin = False
-            st.session_state.login_time = None
-            st.session_state.last_activity = None
+            # Batch initialization for better performance
+            st.session_state.update({
+                'authenticated': False,
+                'username': None,
+                'is_admin': False,
+                'login_time': None,
+                'last_activity': None
+            })
 
             try:
                 cookies = AuthService._get_cookie_controller()
@@ -61,11 +64,14 @@ class AuthService:
                     session_data = json.loads(session_cookie)
                     login_time = datetime.fromisoformat(session_data['login_time'])
                     if datetime.now() - login_time < timedelta(minutes=SESSION_TIMEOUT_MINUTES):
-                        st.session_state.authenticated = True
-                        st.session_state.username = session_data['username']
-                        st.session_state.is_admin = session_data['is_admin']
-                        st.session_state.login_time = login_time
-                        st.session_state.last_activity = datetime.now()
+                        # Batch update for better performance
+                        st.session_state.update({
+                            'authenticated': True,
+                            'username': session_data['username'],
+                            'is_admin': session_data['is_admin'],
+                            'login_time': login_time,
+                            'last_activity': datetime.now()
+                        })
             except Exception:
                 pass
 
@@ -80,11 +86,16 @@ class AuthService:
     def login(username, password):
         """Login user and create session"""
         if AuthService.authenticate_user(username, password):
-            st.session_state.authenticated = True
-            st.session_state.username = username
-            st.session_state.is_admin = username in ADMIN_USERS
-            st.session_state.login_time = datetime.now()
-            st.session_state.last_activity = datetime.now()
+            current_time = datetime.now()
+
+            # Batch update session state
+            st.session_state.update({
+                'authenticated': True,
+                'username': username,
+                'is_admin': username in ADMIN_USERS,
+                'login_time': current_time,
+                'last_activity': current_time
+            })
 
             try:
                 session_data = AuthService._create_session_data(username)
@@ -105,11 +116,14 @@ class AuthService:
         except Exception:
             pass
 
-        st.session_state.authenticated = False
-        st.session_state.username = None
-        st.session_state.is_admin = False
-        st.session_state.login_time = None
-        st.session_state.last_activity = None
+        # Batch clear session state
+        st.session_state.update({
+            'authenticated': False,
+            'username': None,
+            'is_admin': False,
+            'login_time': None,
+            'last_activity': None
+        })
 
     @staticmethod
     def is_authenticated():

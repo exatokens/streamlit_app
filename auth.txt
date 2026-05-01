@@ -1,0 +1,36 @@
+Single active session per user, persisted in your existing MySQL DB, with a browser cookie as the key. Works across tabs, survives refresh, expires in 60 minutes, and naturally forces re-login in a different browser.
+
+Step 1: MySQL — Add One Table
+Add user_sessions to your existing MySQL database with columns for token, user_id, username, created_at, and expires_at. Add an index on expires_at for fast cleanup queries.
+
+Step 2: Install Dependencies
+Two new packages — extra-streamlit-components for cookie management and bcrypt if you're not already hashing passwords. Your existing MySQL connector stays as-is.
+
+Step 3: Build session_store.py
+This is the only file that talks to MySQL for auth. Four functions:
+
+create_session — generates a secure random token, writes it to MySQL with 60-min expiry, returns the token
+validate_session — looks up token in MySQL, checks expiry, returns user info or None
+refresh_session — slides the expires_at forward by 60 minutes on each valid load
+delete_session — removes the row on logout or expiry detection
+
+
+Step 4: Build auth.py
+Orchestrates cookies and session_state. Three functions:
+
+get_current_user — checks session_state first (fast path, no DB hit), then falls back to reading cookie and validating against MySQL (cold path for refresh/new tab)
+login — verifies credentials, calls create_session, sets cookie, loads session_state
+logout — calls delete_session, clears cookie, clears session_state, reruns
+
+
+Step 5: Wire Into app.py and Every Page
+Call get_current_user() at the top of every page. If it returns None, show the login form. If it returns a user, show the page content. This single check handles all cases — refresh, new tab, expired session, logged out from another browser.
+
+How Each Requirement Is Met
+Stays logged in after refresh — cookie survives refresh, MySQL validates the token, session_state gets repopulated
+Multiple tabs in same browser — all tabs share the same cookie, same token, same MySQL row
+Different browser forces re-login — no cookie exists in the new browser, login form appears naturally
+60-minute expiry — expires_at in MySQL is the source of truth, refresh_session slides it forward on activity
+Fast — session_state fast path means normal navigation never touches MySQL or cookies
+Multi-process ready — when you scale, only session_store.py changes to point at Redis. Everything else stays identical
+
